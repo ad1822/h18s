@@ -22,7 +22,7 @@ spec:
     #           pathType: Prefix,
     #           backend: { service: { name: sonarr, port: { number: 8989 } } },
     #         }
-    - host: radarr.h18.lab
+    - host: radarr.h18s.lab
       http:
         paths:
           - {
