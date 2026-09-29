@@ -22,14 +22,14 @@ spec:
     #           pathType: Prefix,
     #           backend: { service: { name: sonarr, port: { number: 8989 } } },
     #         }
-    # - host: radarr.home.lab
-    #   http:
-    #     paths:
-    #       - {
-    #           path: /,
-    #           pathType: Prefix,
-    #           backend: { service: { name: radarr, port: { number: 7878 } } },
-    #         }
+    - host: radarr.h18.lab
+      http:
+        paths:
+          - {
+              path: /,
+              pathType: Prefix,
+              backend: { service: { name: radarr, port: { number: 7878 } } },
+            }
     # - host: prowlarr.home.lab
     #   http:
     #     paths:
