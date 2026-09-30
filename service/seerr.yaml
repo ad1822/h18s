@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: seerr
+  namespace: default
+spec:
+  selector:
+    app: seerr
+  ports:
+    - name: seerr
+      port: 5055
+      targetPort: 5055

@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: seerr
+  namespace: default
+  labels:
+    app: seerr
+spec:
+  selector:
+    matchLabels:
+      app: seerr
+  replicas: 1
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      annotations:
+        kubectl.kubernetes.io/default-container: seerr
+      labels:
+        app: seerr
+    spec:
+      containers:
+        - name: seerr
+          image: ghcr.io/seerr-team/seerr:latest
+          imagePullPolicy:
+          env:
+            - name: TZ
+              value: Asia/Kolkata
+            - name: PORT
+              value: "5055"
+          ports:
+            - containerPort: 5055
+              name: seerr
+          volumeMounts:
+            - name: config
+              mountPath: /config
+      volumes:
+        - name: config
+          hostPath:
+            path: /home/ad/homelab/config/seerr
+      restartPolicy: Always
+---
