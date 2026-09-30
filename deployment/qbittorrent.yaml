@@ -49,9 +49,11 @@ spec:
               protocol: UDP
       volumes:
         - name: data
+          type: Directory
           hostPath:
             path: /home/ad/homelab/data
         - name: config
+          type: Directory
           hostPath:
             path: /home/ad/homelab/config/qbittorrent
       restartPolicy: Always
