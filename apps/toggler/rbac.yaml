@@ -14,12 +14,12 @@ rules:
   - apiGroups: ["apps"]
     resources: ["deployments"]
     resourceNames:
-      ["jellyfin", "prowlarr", "qbittorrent", "radarr", "seerr", "sonarr", "syncthing"]
+      ["jellyfin", "prowlarr", "qbittorrent", "radarr", "seerr", "sonarr", "stash", "syncthing", "whisparr"]
     verbs: ["get"]
   - apiGroups: ["apps"]
     resources: ["deployments/scale"]
     resourceNames:
-      ["jellyfin", "prowlarr", "qbittorrent", "radarr", "seerr", "sonarr", "syncthing"]
+      ["jellyfin", "prowlarr", "qbittorrent", "radarr", "seerr", "sonarr", "stash", "syncthing", "whisparr"]
     verbs: ["patch"]
 
 ---
