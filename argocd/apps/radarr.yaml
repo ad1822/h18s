@@ -16,5 +16,13 @@ spec:
     namespace: default # where radarr's Deployment/Service/Ingress go
   syncPolicy:
     automated:
-      prune: true # delete things you remove from git
-      selfHeal: true # undo manual kubectl changes
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - RespectIgnoreDifferences=true
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      name: radarr
+      jsonPointers:
+        - /spec/replicas

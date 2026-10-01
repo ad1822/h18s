@@ -10,7 +10,7 @@ spec:
   selector:
     matchLabels:
       app: prowlarr
-  replicas: 1
+  # replicas: 1
   strategy:
     rollingUpdate:
       maxSurge: 25%
