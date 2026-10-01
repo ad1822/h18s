@@ -11,3 +11,4 @@ resources:
   - radarr.yaml
   - seerr.yaml
   - sonarr.yaml
+  - togger.yaml
