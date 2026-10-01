@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: prowlarr # app name shown in the Argo CD UI
+  namespace: argocd # Applications always live in the argocd namespace
+  annotations:
+    argocd.argoproj.io/sync-wave: "10" # sync after infra (waves 0–1)
+spec:
+  project: apps # use "default" if you haven't created the AppProjects yet
+  source:
+    repoURL: https://github.com/ad1822/h18s.git
+    targetRevision: dev # git branch to watch
+    path: apps/prowlarr # folder with your kustomization.yaml
+  destination:
+    server: https://kubernetes.default.svc # this cluster
+    namespace: default # where homepage's Deployment/Service/Ingress go
+  syncPolicy:
+    automated:
+      prune: true # delete things you remove from git
+      selfHeal: true # undo manual kubectl changes

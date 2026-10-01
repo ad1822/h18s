@@ -1,0 +1,19 @@
+[req]
+default_bits = 2048
+prompt = no
+req_extensions = req_ext
+distinguished_name = dn
+
+[dn]
+C = IN
+ST = Gujarat
+L = Ahmedabad
+O = H18S Homelab
+CN = *.h18s.lab
+
+[req_ext]
+subjectAltName = @alt_names
+
+[alt_names]
+DNS.1 = *.h18s.lab
+DNS.2 = h18s.lab
