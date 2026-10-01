@@ -1,0 +1,57 @@
+# https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stash
+  namespace: default
+  labels:
+    app: stash
+spec:
+  selector:
+    matchLabels:
+      app: stash
+  # replicas: 1
+  strategy:
+    type: Recreate # sqlite db in /root/.stash; never run two at once
+  template:
+    metadata:
+      annotations:
+        kubectl.kubernetes.io/default-container: stash
+      labels:
+        app: stash
+    spec:
+      containers:
+        - name: stash
+          image: stashapp/stash:latest
+          env:
+            - name: TZ
+              value: Asia/Kolkata
+            - name: STASH_PORT
+              value: "9999"
+            - name: STASH_STASH # library whisparr imports into
+              value: /data/media/xxx/
+            - name: STASH_GENERATED
+              value: /root/.stash/generated/
+            - name: STASH_METADATA
+              value: /root/.stash/metadata/
+            - name: STASH_CACHE
+              value: /root/.stash/cache/
+          ports:
+            - containerPort: 9999
+              name: stash
+          volumeMounts:
+            - name: config
+              mountPath: /root/.stash
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          hostPath:
+            path: /home/ad/homelab/data
+            type: Directory
+        - name: config
+          hostPath:
+            path: /home/ad/homelab/config/stash
+            type: Directory
+      restartPolicy: Always
+---

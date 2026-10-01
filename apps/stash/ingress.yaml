@@ -1,0 +1,16 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: stash
+  namespace: default
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: stash.h18s.lab
+      http:
+        paths:
+          - {
+              path: /,
+              pathType: Prefix,
+              backend: { service: { name: stash, port: { number: 9999 } } },
+            }
