@@ -3,3 +3,4 @@ kind: Kustomization
 resources:
   - dashboard.yaml
   - tls-store.yaml
+  - sealed-secret.yaml
