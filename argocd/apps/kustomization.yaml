@@ -11,4 +11,5 @@ resources:
   - radarr.yaml
   - seerr.yaml
   - sonarr.yaml
+  - syncthing.yaml
   - toggler.yaml

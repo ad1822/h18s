@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: syncthing
+  namespace: default
+  labels:
+    app: syncthing
+spec:
+  selector:
+    matchLabels:
+      app: syncthing
+  # replicas: 1
+  strategy:
+    type: Recreate # same device ID must never run twice
+  template:
+    metadata:
+      annotations:
+        kubectl.kubernetes.io/default-container: syncthing
+      labels:
+        app: syncthing
+    spec:
+      hostNetwork: true # local discovery (21027/udp) + sync (22000) on the node's IP
+      dnsPolicy: ClusterFirstWithHostNet
+      containers:
+        - name: syncthing
+          image: syncthing/syncthing
+          env:
+            - name: PUID
+              value: "1000"
+            - name: PGID
+              value: "1001"
+            - name: HOME # config.xml uses ~/... paths; resolve them like on the host
+              value: /home/ad
+          ports:
+            - containerPort: 8384
+              name: gui
+            - containerPort: 22000
+              name: sync-tcp
+              protocol: TCP
+            - containerPort: 22000
+              name: sync-quic
+              protocol: UDP
+            - containerPort: 21027
+              name: discovery
+              protocol: UDP
+          volumeMounts:
+            - name: config
+              mountPath: /var/syncthing/config
+            - name: music
+              mountPath: /home/ad/Music
+            - name: zettelkasten
+              mountPath: /home/ad/Zettelkasten
+            - name: dump
+              mountPath: /home/ad/dump
+            - name: kubernetes
+              mountPath: /home/ad/work/side/kubernetes
+            - name: pass
+              mountPath: /home/ad/work/side/pass
+      volumes:
+        - name: config # same dir the systemd service used
+          hostPath:
+            path: /home/ad/.local/state/syncthing
+            type: Directory
+        - name: music
+          hostPath:
+            path: /home/ad/Music
+            type: Directory
+        - name: zettelkasten
+          hostPath:
+            path: /home/ad/Zettelkasten
+            type: Directory
+        - name: dump
+          hostPath:
+            path: /home/ad/dump
+            type: Directory
+        - name: kubernetes
+          hostPath:
+            path: /home/ad/work/side/kubernetes
+            type: Directory
+        - name: pass
+          hostPath:
+            path: /home/ad/work/side/pass
+            type: Directory
+      restartPolicy: Always
