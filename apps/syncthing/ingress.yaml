@@ -1,0 +1,16 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: syncthing
+  namespace: default
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: syncthing.h18s.lab
+      http:
+        paths:
+          - {
+              path: /,
+              pathType: Prefix,
+              backend: { service: { name: syncthing, port: { number: 8384 } } },
+            }
