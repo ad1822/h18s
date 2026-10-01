@@ -5,72 +5,122 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Toggler</title>
 <style>
-  /* Transparent background so it blends into the Homepage card it's embedded in. */
-  :root { --fg: #e5e7eb; --muted: #9ca3af; --on: #22c55e; --busy: #f59e0b; --off: #6b7280; --err: #ef4444; --track: #374151; }
-  @media (prefers-color-scheme: light) {
-    :root { --fg: #111827; --muted: #6b7280; --track: #d1d5db; }
+  /* Always on a dark Homepage card, so no light theme. Transparent background blends into it. */
+  :root {
+    --fg: #ffffff;
+    --muted: rgba(255, 255, 255, .6);
+    --row-hover: rgba(255, 255, 255, .06);
+    --on: #22c55e;
+    --busy: #f59e0b;
+    --off: rgba(255, 255, 255, .35);
+    --err: #f87171;
+    --track: rgba(255, 255, 255, .18);
   }
   * { box-sizing: border-box; }
-  html, body { margin: 0; background: transparent; color: var(--fg); font: 14px/1.4 system-ui, sans-serif; }
-  ul { list-style: none; margin: 0; padding: 4px 8px; }
-  li { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
-  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--off); flex: none; }
-  .running .dot { background: var(--on); }
-  .starting .dot, .stopping .dot { background: var(--busy); }
-  .unknown .dot { background: var(--err); }
-  .name { flex: 1; text-transform: capitalize; }
-  .state { color: var(--muted); font-size: 12px; min-width: 60px; text-align: right; }
-  .unknown .state { color: var(--err); }
+  html, body { margin: 0; background: transparent; color: var(--fg); font: 15px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
+  ul { list-style: none; margin: 0; padding: 4px; }
+  li { display: flex; align-items: center; gap: 12px; padding: 8px 10px; border-radius: 8px; transition: background .15s; }
+  li:hover { background: var(--row-hover); }
+
+  .icon { width: 26px; height: 26px; flex: none; position: relative; }
+  .icon img { width: 100%; height: 100%; object-fit: contain; }
+  .icon .letter { display: none; width: 100%; height: 100%; border-radius: 6px; background: var(--track); align-items: center; justify-content: center; font-weight: 600; font-size: 13px; text-transform: uppercase; }
+  .icon.fallback img { display: none; }
+  .icon.fallback .letter { display: flex; }
+  /* status dot on the icon's corner */
+  .icon::after { content: ""; position: absolute; right: -2px; bottom: -2px; width: 9px; height: 9px; border-radius: 50%; background: var(--off); box-shadow: 0 0 0 2px rgba(20, 24, 40, .9); }
+  .running .icon::after { background: var(--on); }
+  .starting .icon::after, .stopping .icon::after { background: var(--busy); }
+  .unknown .icon::after { background: var(--err); }
+  .stopped .icon img { filter: grayscale(1); opacity: .55; }
+
+  .name { flex: 1; font-weight: 500; color: var(--fg); }
+  .stopped .name { color: var(--muted); }
+
+  .state { font-size: 12px; font-weight: 500; padding: 2px 8px; border-radius: 999px; color: var(--muted); background: rgba(255, 255, 255, .08); }
+  .running .state { color: var(--on); background: rgba(34, 197, 94, .14); }
+  .starting .state, .stopping .state { color: var(--busy); background: rgba(245, 158, 11, .14); }
+  .unknown .state { color: var(--err); background: rgba(248, 113, 113, .14); }
+
   /* switch */
-  .switch { position: relative; width: 36px; height: 20px; flex: none; }
-  .switch input { opacity: 0; width: 0; height: 0; }
+  .switch { position: relative; width: 38px; height: 22px; flex: none; }
+  .switch input { position: absolute; opacity: 0; width: 0; height: 0; }
   .slider { position: absolute; inset: 0; background: var(--track); border-radius: 999px; cursor: pointer; transition: background .15s; }
-  .slider::before { content: ""; position: absolute; width: 16px; height: 16px; left: 2px; top: 2px; background: #fff; border-radius: 50%; transition: transform .15s; }
+  .slider::before { content: ""; position: absolute; width: 18px; height: 18px; left: 2px; top: 2px; background: #fff; border-radius: 50%; box-shadow: 0 1px 2px rgba(0, 0, 0, .3); transition: transform .15s; }
   input:checked + .slider { background: var(--on); }
   input:checked + .slider::before { transform: translateX(16px); }
   input:disabled + .slider { opacity: .5; cursor: progress; }
   input:focus-visible + .slider { outline: 2px solid var(--fg); outline-offset: 2px; }
-  #error { color: var(--err); font-size: 12px; padding: 0 8px; }
+
+  #error { color: var(--err); font-size: 12px; padding: 0 14px 6px; }
+  #error:empty { display: none; }
 </style>
 </head>
 <body>
 <ul id="apps"></ul>
 <div id="error" role="alert"></div>
 <script>
+  // Same icon source Homepage uses for "<name>.svg" icons.
+  const ICON_URL = (name) => `https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/${encodeURIComponent(name)}.svg`;
+
+  // Names that plain capitalization gets wrong.
+  const DISPLAY_NAMES = { qbittorrent: "qBittorrent" };
+  const displayName = (name) => DISPLAY_NAMES[name] || name.charAt(0).toUpperCase() + name.slice(1);
+
   const list = document.getElementById("apps");
   const errorBox = document.getElementById("error");
   const pending = new Set();
+  const rows = new Map(); // name -> elements; rows are reused so icons don't flicker on refresh
+
+  function createRow(name) {
+    const li = document.createElement("li");
+
+    const icon = document.createElement("span");
+    icon.className = "icon";
+    const img = document.createElement("img");
+    img.alt = "";
+    img.src = ICON_URL(name);
+    img.addEventListener("error", () => icon.classList.add("fallback"));
+    const letter = document.createElement("span");
+    letter.className = "letter";
+    letter.textContent = name[0];
+    icon.append(img, letter);
+
+    const label = document.createElement("span");
+    label.className = "name";
+    label.textContent = displayName(name);
+
+    const state = document.createElement("span");
+    state.className = "state";
+
+    const sw = document.createElement("label");
+    sw.className = "switch";
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.setAttribute("aria-label", `Toggle ${displayName(name)}`);
+    input.addEventListener("change", () => toggle(name, input.checked));
+    const slider = document.createElement("span");
+    slider.className = "slider";
+    sw.append(input, slider);
+
+    li.append(icon, label, state, sw);
+    list.append(li);
+    return { li, state, input };
+  }
 
   function render(apps) {
-    list.replaceChildren(...apps.map((app) => {
-      const li = document.createElement("li");
-      li.className = app.state;
-      li.title = app.error || `${app.ready}/${app.desired} ready`;
-
-      const dot = document.createElement("span");
-      dot.className = "dot";
-      const name = document.createElement("span");
-      name.className = "name";
-      name.textContent = app.name;
-      const state = document.createElement("span");
-      state.className = "state";
-      state.textContent = app.state;
-
-      const label = document.createElement("label");
-      label.className = "switch";
-      const input = document.createElement("input");
-      input.type = "checkbox";
-      input.setAttribute("aria-label", `Toggle ${app.name}`);
-      input.checked = app.desired > 0;
-      input.disabled = pending.has(app.name) || app.state === "unknown";
-      input.addEventListener("change", () => toggle(app.name, input.checked));
-      const slider = document.createElement("span");
-      slider.className = "slider";
-      label.append(input, slider);
-
-      li.append(dot, name, state, label);
-      return li;
-    }));
+    for (const app of apps) {
+      let row = rows.get(app.name);
+      if (!row) {
+        row = createRow(app.name);
+        rows.set(app.name, row);
+      }
+      row.li.className = app.state;
+      row.li.title = app.error || `${app.ready}/${app.desired} ready`;
+      row.state.textContent = app.state;
+      if (!pending.has(app.name)) row.input.checked = app.desired > 0;
+      row.input.disabled = pending.has(app.name) || app.state === "unknown";
+    }
   }
 
   async function refresh() {
@@ -86,6 +136,7 @@
 
   async function toggle(name, on) {
     pending.add(name);
+    rows.get(name).input.disabled = true;
     errorBox.textContent = "";
     try {
       const res = await fetch(`api/apps/${encodeURIComponent(name)}/${on ? "start" : "stop"}`, {
