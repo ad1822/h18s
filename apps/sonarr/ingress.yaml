@@ -1,0 +1,16 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: sonarr
+  namespace: default
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: sonarr.h18s.lab
+      http:
+        paths:
+          - {
+              path: /,
+              pathType: Prefix,
+              backend: { service: { name: sonarr, port: { number: 8989 } } },
+            }
