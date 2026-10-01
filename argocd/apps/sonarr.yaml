@@ -14,7 +14,15 @@ spec:
   destination:
     server: https://kubernetes.default.svc # this cluster
     namespace: default # where radarr's Deployment/Service/Ingress go
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      name: sonarr
+      jsonPointers:
+        - /spec/replicas
   syncPolicy:
     automated:
-      prune: true # delete things you remove from git
-      selfHeal: true # undo manual kubectl changes
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - RespectIgnoreDifferences=true
