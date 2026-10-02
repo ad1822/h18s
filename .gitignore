@@ -1,2 +1,5 @@
 # private keys and the unsealed TLS secret never go to git
 pki/*
+
+# GitHub App / other private keys
+*.pem
