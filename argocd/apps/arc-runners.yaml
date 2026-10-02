@@ -1,0 +1,40 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: arc-runners
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2" # after the controller and its CRDs
+spec:
+  project: infra
+  sources:
+    - repoURL: oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set
+      targetRevision: 0.14.2 # keep identical to arc-controller
+      helm:
+        releaseName: h18s
+        valuesObject:
+          githubConfigUrl: https://github.com/ad1822/h18s
+          githubConfigSecret: arc-github-app
+          runnerScaleSetName: h18s # what runs-on: h18s matches
+          minRunners: 0
+          maxRunners: 2
+          controllerServiceAccount: # must match arc-controller's release name
+            namespace: arc-systems
+            name: arc-gha-rs-controller
+          template:
+            spec:
+              automountServiceAccountToken: false # runner pods get no Kubernetes permissions
+              containers:
+                - name: runner
+                  image: ghcr.io/actions/actions-runner:latest
+                  command: ["/home/runner/run.sh"]
+    - repoURL: https://github.com/ad1822/h18s.git
+      targetRevision: dev
+      path: infra/arc/runners # the SealedSecret
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: arc-runners
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions:
+      - CreateNamespace=true

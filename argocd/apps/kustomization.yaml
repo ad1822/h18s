@@ -5,6 +5,8 @@ resources:
   - backup.yaml
   - traefik-config.yaml
   - argocd-config.yaml
+  - arc-controller.yaml
+  - arc-runners.yaml
   - homepage.yaml
   - jellyfin.yaml
   - prowlarr.yaml
