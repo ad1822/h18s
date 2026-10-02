@@ -9,34 +9,23 @@ on:
       - "infra/**"
       - ".github/workflows/**"
 jobs:
-  find-dirs:
-    runs-on: h18s
-    outputs:
-      matrix: ${{ steps.kustomize-dirs.outputs.dirs }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Find all kubernetes dir
-        id: kustomize-dirs
-        run: |
-          # Finds all directories containing kustomization.yaml and formats as JSON
-          DIRS_JSON=$(find . -name kustomization.yaml -exec dirname {} + | jq -R -s -c 'split("\n")[:-1]')
-          echo "dirs=${DIRS_JSON}" >> "$GITHUB_OUTPUT"
-
   validate:
-    needs: find-dirs
     runs-on: h18s
-    strategy:
-      matrix:
-        app-path: ${{ fromJson(needs.find-dirs.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v4
-
       - uses: imranismail/setup-kustomize@v3
       - uses: bmuschko/setup-kubeconform@v1
-      - name: Validate every kubernetes file
+
+      - name: Validate every kustomization
+        shell: bash
         run: |
-          echo "Validating manifests inside: ${{ matrix.app-path }}"
-          kustomize build "${{ matrix.app-path }}" | kubeconform -strict -summary -skip CustomResourceDefinition \
-            -schema-location default \
-            -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json'
+          failed=0
+          for dir in $(find . -name kustomization.yaml -exec dirname {} \; | sort); do
+            echo "::group::$dir"
+            kustomize build "$dir" | kubeconform -strict -summary -skip CustomResourceDefinition \
+              -schema-location default \
+              -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
+              || { echo "::error::$dir failed"; failed=1; }
+            echo "::endgroup::"
+          done
+          exit $failed
