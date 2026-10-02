@@ -36,6 +36,9 @@ jobs:
         run: |
           echo "Setting up validation tools..."
 
+      - uses: imranismail/setup-kustomize@v3
+      - uses: bmuschko/setup-kubeconform@v1
+
       - name: Validate every kubernetes file
         run: |
           echo "Validating manifests inside: ${{ matrix.app-path }}"
