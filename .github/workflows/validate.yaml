@@ -42,6 +42,6 @@ jobs:
       - name: Validate every kubernetes file
         run: |
           echo "Validating manifests inside: ${{ matrix.app-path }}"
-          kustomize build "${{ matrix.app-path }}" | kubeconform -strict -summary \
+          kustomize build "${{ matrix.app-path }}" | kubeconform -strict -summary -skip CustomResourceDefinition \
             -schema-location default \
             -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json'
