@@ -10,7 +10,7 @@ on:
       - ".github/workflows/**"
 jobs:
   find-dirs:
-    runs-on: ubuntu-latest
+    runs-on: h18s
     outputs:
       matrix: ${{ steps.kustomize-dirs.outputs.dirs }}
     steps:
@@ -25,19 +25,12 @@ jobs:
 
   validate:
     needs: find-dirs
-    runs-on: ubuntu-latest
+    runs-on: h18s
     strategy:
       matrix:
         app-path: ${{ fromJson(needs.find-dirs.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Kustomize & Kubeconform
-        run: |
-          echo "Setting up validation tools..."
-
-      - uses: imranismail/setup-kustomize@v3
-      - uses: bmuschko/setup-kubeconform@v1
 
       - name: Validate every kubernetes file
         run: |
