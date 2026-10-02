@@ -23,10 +23,15 @@ jobs:
 
       - name: Find all kubernetes dir
         id: kustomize-dirs
-        run: find . -name kustomization.yaml >> $GITHUB_OUTPUT
+        run: |
+          {
+            echo 'dirs<<EOF'
+            find . -name kustomization.yaml
+            echo 'EOF',
+          }
 
       - name: Echoing the directories
-        run: echo $GITHUB_OUTPUT
+        run: echo "${{ steps.kustomize-dirs.outputs.dirs }}"
       #
       # - name: Validate every kubernetes file
       #   run: |
