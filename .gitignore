@@ -1,4 +1,2 @@
 # private keys and the unsealed TLS secret never go to git
-pki/*.key
-pki/secret.yaml
-pki/sealed-secrets-key.secret.yaml
+pki/*
