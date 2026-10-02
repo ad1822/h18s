@@ -1,0 +1,21 @@
+# paths relative to /home/ad; uploaded to gdrive:backups/<path>
+Music
+Zettelkasten
+Pictures/Wallpaper
+work/main/dotsh
+work/side/pass
+config_bak/atuin
+config_bak/btop
+config_bak/dunst
+config_bak/fish
+config_bak/fastfetch
+config_bak/ghostty
+config_bak/git
+config_bak/hypr
+config_bak/tmux
+config_bak/waybar
+config_bak/wakapi
+config_bak/starship
+config_bak/rofi
+config_bak/nvim
+config_bak/kanata

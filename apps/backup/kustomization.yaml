@@ -1,0 +1,20 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: default
+
+resources:
+  - cronjob.yaml
+  - sealed-rclone-secret.yaml
+
+configMapGenerator:
+  - name: backup-scripts
+    files:
+      - backup.sh
+      - sources.txt
+
+labels:
+  - pairs:
+      type: backup
+    includeTemplates: false # Also apply labels in Pod
+    includeSelectors: false # Don't apply labels in matchSelectors

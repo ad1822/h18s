@@ -1,0 +1,62 @@
+# https://kubernetes.io/docs/concepts/workloads/controllers/cron-jobs/
+# replaces the host crontab + ansible data-backup role: same sources, same gdrive:backups layout
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: backup
+  namespace: default
+  labels:
+    app: backup
+spec:
+  schedule: "5 15 * * *"
+  timeZone: Asia/Kolkata
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 86400 # laptop may be off at 15:05; run the missed backup once the cluster is back (within a day)
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        metadata:
+          labels:
+            app: backup
+        spec:
+          restartPolicy: Never
+          securityContext: # source dirs are 0700 owned by ad
+            runAsUser: 1000
+            runAsGroup: 1000
+          containers:
+            - name: rclone
+              image: rclone/rclone:latest
+              command: ["/bin/sh", "/scripts/backup.sh"]
+              env:
+                - name: TZ
+                  value: Asia/Kolkata
+                - name: HOME
+                  value: /tmp
+                - name: BACKUP_DEST
+                  value: gdrive:backups
+              volumeMounts:
+                - name: scripts
+                  mountPath: /scripts
+                - name: rclone-config
+                  mountPath: /secret
+                - name: tmp
+                  mountPath: /tmp
+                - name: home
+                  mountPath: /home/ad
+                  readOnly: true
+          volumes:
+            - name: scripts
+              configMap:
+                name: backup-scripts
+            - name: rclone-config
+              secret:
+                secretName: rclone-config
+            - name: tmp
+              emptyDir: {}
+            - name: home
+              hostPath:
+                path: /home/ad
+                type: Directory
