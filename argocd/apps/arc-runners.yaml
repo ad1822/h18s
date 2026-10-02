@@ -10,6 +10,7 @@ spec:
   sources:
     - repoURL: oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set
       targetRevision: 0.14.2 # keep identical to arc-controller
+      path: . # oci:// sources need a path; the chart sits at the artifact root
       helm:
         releaseName: h18s
         valuesObject:
