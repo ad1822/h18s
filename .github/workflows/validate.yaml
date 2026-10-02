@@ -8,34 +8,37 @@ on:
       - "argocd/**"
       - "infra/**"
       - ".github/workflows/**"
-
 jobs:
-  validate-kubeconform:
+  find-dirs:
     runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.kustomize-dirs.outputs.dirs }}
     steps:
-      - uses: actions/checkout@v6
-
-      - name: Setup kubeconform
-        uses: bmuschko/setup-kubeconform@v1
-
-      - name: Setup kustomize
-        uses: imranismail/setup-kustomize@v3
+      - uses: actions/checkout@v4
 
       - name: Find all kubernetes dir
         id: kustomize-dirs
         run: |
-          {
-            echo 'dirs<<EOF'
-            find . -name kustomization.yaml
-            echo 'EOF',
-          }
+          # Finds all directories containing kustomization.yaml and formats as JSON
+          DIRS_JSON=$(find . -name kustomization.yaml -exec dirname {} + | jq -R -s -c 'split("\n")[:-1]')
+          echo "dirs=${DIRS_JSON}" >> "$GITHUB_OUTPUT"
 
-      - name: Echoing the directories
-        run: echo "${{ steps.kustomize-dirs.outputs.dirs }}"
-      #
-      # - name: Validate every kubernetes file
-      #   run: |
-      #     echo "Validating manifests inside: ${{ matrix.app-path }}"
-      #     kustomize build . | kubeconform -strict -summary \
-      #       -schema-location default \
-      #       -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json'
+  validate:
+    needs: find-dirs
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        app-path: ${{ fromJson(needs.find-dirs.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Kustomize & Kubeconform
+        run: |
+          echo "Setting up validation tools..."
+
+      - name: Validate every kubernetes file
+        run: |
+          echo "Validating manifests inside: ${{ matrix.app-path }}"
+          kustomize build "${{ matrix.app-path }}" | kubeconform -strict -summary \
+            -schema-location default \
+            -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json'
