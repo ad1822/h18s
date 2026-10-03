@@ -27,7 +27,7 @@ spec:
               automountServiceAccountToken: false # runner pods get no Kubernetes permissions
               containers:
                 - name: runner
-                  image: ghcr.io/actions/actions-runner:latest
+                  image: ayushdumasia/h18s-runner:2.337.0-1
                   command: ["/home/runner/run.sh"]
     - repoURL: https://github.com/ad1822/h18s.git
       targetRevision: dev
