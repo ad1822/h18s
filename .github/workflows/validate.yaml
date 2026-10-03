@@ -13,8 +13,6 @@ jobs:
     runs-on: h18s
     steps:
       - uses: actions/checkout@v4
-      - uses: imranismail/setup-kustomize@v3
-      - uses: bmuschko/setup-kubeconform@v1
 
       - name: Validate every kustomization
         shell: bash
@@ -23,8 +21,8 @@ jobs:
           for dir in $(find . -name kustomization.yaml -exec dirname {} \; | sort); do
             echo "::group::$dir"
             kustomize build "$dir" | kubeconform -strict -summary -skip CustomResourceDefinition \
-              -schema-location default \
-              -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
+              -schema-location '/opt/schemas/k8s/master-standalone-strict/{{.ResourceKind}}{{.KindSuffix}}.json' \
+              -schema-location '/opt/schemas/crds/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json'
               || { echo "::error::$dir failed"; failed=1; }
             echo "::endgroup::"
           done
