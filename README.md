@@ -1,552 +1,397 @@
-# Argo CD restructure: migration guide
+# h18s
 
-This guide moves the repo from the current folder-scanning `ApplicationSet`
-(`argocd/app.yaml`) to an **app-of-apps** layout where every app is listed by
-hand.
+A single-node Kubernetes homelab on my laptop, managed with GitOps.
+Everything in the cluster is defined in this repo. Argo CD watches the `dev`
+branch and applies it, and CI checks every change before it lands.
 
-- One Argo CD `Application` per real app (radarr, jellyfin, ...), not one per
-  resource kind (deployment, service, ...).
-- Every folder has a `kustomization.yaml` with an explicit `resources:` list.
-  Argo CD deploys only what is listed. New folders, stray files and `*.example`
-  files are never picked up.
-- Ordering comes from sync waves. Projects go first (`-1`), then infra (`0`–`1`),
-  then apps (`10`).
+| | |
+|---|---|
+| **Cluster** | k3s `v1.36` on one node (`acheron`, 16 cores / 24 GB) |
+| **GitOps** | Argo CD `v3.5`, app-of-apps, tracking `dev` |
+| **Ingress** | Traefik (bundled with k3s), TLS from a private root CA |
+| **Secrets** | Bitnami Sealed Secrets, encrypted secrets committed to git |
+| **CI** | GitHub Actions on self-hosted runners in the cluster (ARC) |
+| **Domain** | `*.h18s.lab`, resolved locally via `/etc/hosts` |
 
 ---
 
-## 0. Target layout
+## Architecture
+
+### GitOps flow
+
+```mermaid
+flowchart LR
+    dev[git push to dev] --> gh[(GitHub<br/>ad1822/h18s)]
+    gh -- "workflow job<br/>runs-on: h18s" --> arc
+    gh -- "polls dev" --> argo
+
+    subgraph k3s["k3s on laptop (acheron)"]
+        argo[Argo CD<br/>root app] --> infra[infra apps<br/>waves 0-2]
+        argo --> apps[user apps<br/>wave 10]
+        arc[ARC listener] --> runner[ephemeral<br/>runner pod]
+    end
+
+    runner -- "kustomize build | kubeconform" --> gh
+```
+
+- **CD is pull-based.** Argo CD polls GitHub and applies what's in `dev`.
+  Nothing outside the cluster can deploy to it.
+- **CI doesn't touch the cluster.** Runner pods only validate manifests and
+  report back to GitHub. They get no Kubernetes permissions.
+- The ARC listener makes an **outgoing** connection to GitHub, so no ports
+  need to be open on the home network.
+
+### Request flow
+
+```
+browser ──► radarr.h18s.lab
+            │  /etc/hosts → 127.0.0.1
+            ▼
+        Traefik (k3s servicelb, :80/:443)
+            │  TLS: default cert h18s-tls (TLSStore), signed by h18s root CA
+            │  Ingress host rule
+            ▼
+        Service radarr:7878 ──► Pod radarr
+                                 │ hostPath
+                                 ▼
+                     /home/ad/homelab/{config,data}
+```
+
+### Argo CD layout (app-of-apps)
+
+`bootstrap/root.yaml` is the only manifest applied by hand. It points at
+`argocd/`, which holds the AppProjects and one `Application` per app.
+
+| Sync wave | Applications | Project | Namespace |
+|---|---|---|---|
+| -1 | AppProjects `infra`, `apps` | - | `argocd` |
+| 0 | `sealed-secrets` | infra | `kube-system` |
+| 1 | `traefik-config`, `argocd-config`, `arc-controller` | infra | `kube-system`, `argocd`, `arc-systems` |
+| 2 | `arc-runners` | infra | `arc-runners` |
+| 10 | `homepage`, `toggler`, `jellyfin`, `prowlarr`, `qbittorrent`, `radarr`, `sonarr`, `seerr`, `syncthing`, `backup` | apps | `default` |
+
+- **`infra` project:** any namespace and any cluster-scoped resource. Sources
+  are this repo plus the ARC Helm charts on `oci://ghcr.io`.
+- **`apps` project:** only the `default` namespace and this repo. The only
+  cluster-scoped resources allowed are ClusterRole and ClusterRoleBinding,
+  which Homepage needs for service discovery.
+
+All apps use automated sync with `prune` and `selfHeal`, so manual
+`kubectl` changes get reverted. The toggled apps ignore `/spec/replicas`, so
+the toggler can scale them without Argo CD undoing it.
+
+---
+
+## Apps
+
+| App | URL | What it does | Image | Always on |
+|---|---|---|---|---|
+| Homepage | `https://h18s` | Dashboard, with the toggler embedded | `ghcr.io/gethomepage/homepage` | yes |
+| Toggler | `https://toggle.h18s.lab` | On/off switches for on-demand apps (my own, see below) | `ayushdumasia/h18s-toggler:0.1.1` | yes |
+| Jellyfin | `https://jellyfin.h18s.lab` | Media server | `jellyfin/jellyfin` | toggled |
+| Seerr | `https://seerr.h18s.lab` | Movie and show requests, which it passes on to Radarr/Sonarr | `ghcr.io/seerr-team/seerr` | toggled |
+| Radarr | `https://radarr.h18s.lab` | Movie automation | `lscr.io/linuxserver/radarr` | toggled |
+| Sonarr | `https://sonarr.h18s.lab` | TV automation | `lscr.io/linuxserver/sonarr` | toggled |
+| Prowlarr | `https://prowlarr.h18s.lab` | Indexer manager, synced to the *arr apps | `lscr.io/linuxserver/prowlarr` | toggled |
+| qBittorrent | `https://qbittorrent.h18s.lab` | Download client | `lscr.io/linuxserver/qbittorrent` | toggled |
+| Syncthing | `https://syncthing.h18s.lab` | File sync with my other devices (`hostNetwork`) | `syncthing/syncthing` | toggled |
+| Backup | - | Daily rclone sync to Google Drive (CronJob) | `rclone/rclone` | scheduled |
+
+Infrastructure UIs:
+
+| UI | URL |
+|---|---|
+| Argo CD | `https://argocd.h18s.lab` |
+| Traefik dashboard | `https://traefik.h18s.lab/dashboard/` |
+
+### Media flow
+
+```
+Seerr (request) ──► Radarr / Sonarr ──► Prowlarr (search indexers)
+                          │
+                          ▼
+                    qBittorrent ──► /data/torrents/{movies,tv}
+                          │
+                          ▼  hardlink on import (same /data mount, no copy)
+                    /data/media/{movies,tv} ──► Jellyfin
+```
+
+Services talk to each other by short name (`http://radarr:7878`,
+`qbittorrent:8080`), since everything runs in the `default` namespace.
+
+### Toggler (on-demand apps)
+
+The cluster runs on my daily laptop, so most apps stay at 0 replicas until I
+need them. `toggler/` is a small Go service with an embedded web page. It
+scales an allowlist of Deployments between 0 and 1 replica.
+
+- Allowlist: the `APPS` env var in `apps/toggler/deployment.yaml`.
+- Permissions: a namespaced Role that can only `get` and patch
+  `deployments/scale` on the names it lists (`apps/toggler/rbac.yaml`). Keep
+  both lists in sync.
+- API: `GET /api/apps`, `POST /api/apps/{name}/{action}`, `GET /healthz`.
+- Embedded in Homepage through its iframe widget. The iframe height lives in
+  Homepage's `custom.css` (about 3rem per app).
+- Image: built from `toggler/Dockerfile` (distroless, non-root, read-only
+  root filesystem).
+
+Turning an app on doesn't turn on what it depends on. For example, Radarr
+needs Prowlarr and qBittorrent running to search and download.
+
+---
+
+## Storage
+
+All persistent data uses `hostPath` volumes under my home directory, so it's
+plain files on the laptop's disk.
+
+```
+/home/ad/homelab/
+├── config/<app>/        # each app's config and database, mounted at /config
+└── data/                # shared by qBittorrent, Radarr, Sonarr; mounted at /data
+    ├── torrents/
+    │   ├── incomplete/
+    │   ├── movies/
+    │   └── tv/
+    └── media/           # Jellyfin reads from here
+        ├── movies/
+        └── tv/
+```
+
+- Download clients and *arr apps mount **the same** `data/` root, so imports
+  are instant hardlinks, not copies.
+- The linuxserver images run as `PUID=1000` / `PGID=1000` with `UMASK=002`,
+  so files stay owned by my user.
+- `hostPath` volumes use `type: Directory`, so a missing folder fails the pod
+  instead of being created silently as root.
+
+---
+
+## Networking, DNS and TLS
+
+- **DNS:** there's no DNS server. Every hostname maps to `127.0.0.1` in
+  `/etc/hosts` on the laptop, so the services only work from this machine.
+- **Ingress:** standard `Ingress` objects with `ingressClassName: traefik`.
+  The Traefik dashboard uses an `IngressRoute`.
+- **TLS:** `pki/` holds a private root CA (`h18s-root-ca`) and a wildcard
+  certificate for `h18s.lab`. The certificate is committed as a SealedSecret
+  (`infra/traefik/sealed-secret.yaml` → `h18s-tls`) and set as Traefik's
+  default certificate through a `TLSStore`. Trust `pki/h18s-root-ca.crt` in
+  the browser or OS to avoid certificate warnings.
+- **Pods and IPv6:** pods have no IPv6 route. Some .NET apps try IPv6 first
+  and time out, so they may need `DOTNET_SYSTEM_NET_DISABLEIPV6=1`.
+
+---
+
+## Secrets
+
+Secrets are committed **encrypted**, as SealedSecrets. Only the
+`sealed-secrets-controller` in `kube-system` can decrypt them.
+
+| SealedSecret | Namespace | Used by |
+|---|---|---|
+| `h18s-tls` | `kube-system` | Traefik default TLS certificate |
+| `rclone-config` | `default` | Backup CronJob (Google Drive token) |
+| `arc-github-app` | `arc-runners` | ARC runners (GitHub App ID, installation ID, private key) |
+
+To seal a new secret:
+
+```sh
+kubectl create secret generic <name> -n <namespace> \
+  --from-file=<key>=<path> --dry-run=client -o yaml \
+  | kubeseal -o yaml > <app-dir>/sealed-<name>.yaml
+```
+
+A SealedSecret only decrypts in the namespace it was sealed for. The
+`template:` block belongs under `spec:`. If it's under `metadata:`, Argo CD
+shows the app as OutOfSync forever.
+
+`.gitignore` keeps `pki/*` (keys, unsealed secrets, the controller's own
+key backup) and `*.pem` out of git. **Back up
+`pki/sealed-secrets-key.secret.yaml` outside the repo.** Without it, a
+rebuilt cluster can't decrypt any of the committed secrets.
+
+---
+
+## Backups
+
+`apps/backup/` replaces my old host crontab plus Ansible playbook.
+
+- **CronJob** `backup`: daily at **15:05 IST** (`timeZone: Asia/Kolkata`),
+  `concurrencyPolicy: Forbid`.
+- **Catch-up:** `startingDeadlineSeconds: 86400`. If the laptop was off at
+  15:05, the missed run starts once the cluster is back, as long as that's
+  within a day.
+- **What it backs up:** each path in `apps/backup/sources.txt` (relative to
+  `/home/ad`) is synced with `rclone sync` to `gdrive:backups/<same path>`.
+  `/home/ad` is mounted read-only, and the job runs as uid 1000.
+- **How it runs:** `backup.sh` and `sources.txt` are packaged with
+  `configMapGenerator`. The ConfigMap name carries a content hash, so editing
+  either file rolls the CronJob onto the new version.
+- **rclone config:** comes from the `rclone-config` SealedSecret. It's copied
+  to `/tmp` at startup so rclone can refresh the OAuth token.
+
+Run a backup now and follow its logs:
+
+```sh
+kubectl create job --from=cronjob/backup backup-manual
+kubectl logs -f job/backup-manual
+```
+
+`rclone sync` mirrors my laptop, so deleting something locally also deletes
+it from Drive on the next run. It's a mirror, not a versioned backup.
+
+---
+
+## CI/CD
+
+### Validation workflow (`.github/workflows/validate.yaml`)
+
+Runs on every PR and on pushes that touch `apps/`, `argocd/`, `infra/` or the
+workflow itself. One job finds every folder with a `kustomization.yaml` and
+runs:
+
+```sh
+kustomize build "$dir" | kubeconform -strict -summary -skip CustomResourceDefinition \
+  -schema-location '/opt/schemas/k8s/master-standalone-strict/{{.ResourceKind}}{{.KindSuffix}}.json' \
+  -schema-location '/opt/schemas/crds/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json'
+```
+
+- It validates the **rendered** output, the same YAML Argo CD applies.
+- `-strict` rejects unknown fields, which Kubernetes would otherwise drop
+  silently.
+- Built-in and CRD schemas (SealedSecret, Argo CD, Traefik) are read from
+  files baked into the runner image, so a run makes no network calls for
+  schemas.
+- It's one job with a loop, not a matrix. With only two runners, starting a
+  pod per folder cost more time than the checks themselves.
+
+### Self-hosted runners (ARC)
+
+GitHub's [Actions Runner Controller](https://github.com/actions/actions-runner-controller),
+installed from its OCI Helm charts by Argo CD:
+
+| Part | Argo CD app | Namespace | Notes |
+|---|---|---|---|
+| Controller | `arc-controller` | `arc-systems` | chart `gha-runner-scale-set-controller` `0.14.2`, `ServerSideApply=true` (its CRDs are too large for a normal apply) |
+| Runner scale set | `arc-runners` | `arc-runners` | chart `gha-runner-scale-set` `0.14.2`, `runnerScaleSetName: h18s`, `minRunners: 0`, `maxRunners: 2` |
+
+- Workflows use it with `runs-on: h18s`.
+- Runner pods are created per job and deleted afterwards. They get
+  `automountServiceAccountToken: false`, so no cluster access.
+- Login is a **GitHub App** installed only on this repo, with Administration
+  read/write and Metadata read. Credentials are in the `arc-github-app`
+  SealedSecret.
+- When the laptop is off, jobs wait in GitHub's queue, which cancels them
+  after 24 hours.
+- The repo is public, so set fork PRs to need manual approval before their
+  workflows run on my hardware (repo **Settings → Actions**).
+
+### Runner image (`runner/Dockerfile`)
+
+`ayushdumasia/h18s-runner:<runner version>-<revision>` (currently
+`2.337.0-1`), built on `ghcr.io/actions/actions-runner:2.337.0` with:
+
+- `kustomize v5.8.2`, `kubeconform v0.8.0`
+- `/opt/schemas/k8s`: `master-standalone-strict` from `yannh/kubernetes-json-schema`
+- `/opt/schemas/crds`: `bitnami.com`, `argoproj.io`, `traefik.io` from `datreeio/CRDs-catalog`
+
+Build and push from the laptop. The in-cluster runners can't build images:
+
+```sh
+docker build -t ayushdumasia/h18s-runner:2.337.0-<n> runner/
+docker push ayushdumasia/h18s-runner:2.337.0-<n>
+# then update `image:` in argocd/apps/arc-runners.yaml
+```
+
+If you add resources of a new CRD group to the repo, add that group to the
+sparse checkout in the Dockerfile and rebuild, or kubeconform will fail on
+the missing schema.
+
+---
+
+## Repository layout
 
 ```
 h18s/
-├── bootstrap/
-│   └── root.yaml                    # only manifest applied by hand
+├── bootstrap/root.yaml        # the only manifest applied by hand
 ├── argocd/
-│   ├── kustomization.yaml           # -> projects/, apps/
-│   ├── projects/
-│   │   ├── kustomization.yaml
-│   │   ├── infra.yaml
-│   │   └── apps.yaml
-│   └── apps/
-│       ├── kustomization.yaml       # THE app registry
-│       ├── sealed-secrets.yaml
-│       ├── traefik-config.yaml
-│       ├── argocd-config.yaml
-│       ├── homepage.yaml
-│       ├── jellyfin.yaml
-│       ├── prowlarr.yaml
-│       ├── qbittorrent.yaml
-│       ├── radarr.yaml
-│       └── seerr.yaml
+│   ├── projects/              # AppProjects: infra, apps
+│   └── apps/                  # one Application per app; kustomization.yaml is the app registry
 ├── infra/
-│   ├── sealed-secrets/
-│   │   ├── kustomization.yaml
-│   │   └── controller.yaml
-│   ├── traefik/
-│   │   ├── kustomization.yaml
-│   │   ├── dashboard.yaml
-│   │   ├── tls-store.yaml
-│   │   └── h18s-tls.sealed.yaml     # created in step 6
-│   └── argocd/
-│       ├── kustomization.yaml
-│       └── ingress.yaml
-├── apps/
-│   ├── ingress.yaml.example
-│   ├── homepage/    {kustomization, rbac, deployment, service, ingress}.yaml
-│   ├── jellyfin/    {kustomization, deployment, service, ingress}.yaml
-│   ├── prowlarr/    {kustomization, deployment, service, ingress}.yaml
-│   ├── qbittorrent/ {kustomization, deployment, service, ingress}.yaml
-│   ├── radarr/      {kustomization, deployment, service, ingress}.yaml
-│   └── seerr/       {kustomization, deployment, service, ingress}.yaml
-└── pki/                             # certs, CSRs, keys. No Application points here
+│   ├── sealed-secrets/        # controller
+│   ├── traefik/               # dashboard IngressRoute, TLSStore, sealed TLS cert
+│   ├── argocd/                # Argo CD ingress
+│   └── arc/runners/           # sealed GitHub App credentials for ARC
+├── apps/<app>/                # deployment, service, ingress, kustomization (one folder per app)
+├── toggler/                   # Go source + Dockerfile for the toggler
+├── runner/                    # custom ARC runner image
+├── .github/workflows/         # CI
+└── pki/                       # CA and certs (gitignored except public certs)
 ```
 
-### Argo CD Applications after migration
-
-| Application      | Project | Path                  | Namespace     | Wave |
-|------------------|---------|-----------------------|---------------|------|
-| `root`           | default | `argocd`              | `argocd`      | -    |
-| `sealed-secrets` | infra   | `infra/sealed-secrets`| `kube-system` | 0    |
-| `traefik-config` | infra   | `infra/traefik`       | `kube-system` | 1    |
-| `argocd-config`  | infra   | `infra/argocd`        | `argocd`      | 1    |
-| `homepage`       | apps    | `apps/homepage`       | `default`     | 10   |
-| `jellyfin`       | apps    | `apps/jellyfin`       | `default`     | 10   |
-| `prowlarr`       | apps    | `apps/prowlarr`       | `default`     | 10   |
-| `qbittorrent`    | apps    | `apps/qbittorrent`    | `default`     | 10   |
-| `radarr`         | apps    | `apps/radarr`         | `default`     | 10   |
-| `seerr`          | apps    | `apps/seerr`          | `default`     | 10   |
-
-### Old file → new file map
-
-| Old                                      | New                                   |
-|------------------------------------------|---------------------------------------|
-| `deployment/<app>.yaml`                  | `apps/<app>/deployment.yaml`          |
-| `service/<app>.yaml`                     | `apps/<app>/service.yaml`             |
-| `serviceaccount/homepage.yaml`           | `apps/homepage/rbac.yaml`             |
-<!-- | # TODO: `ingress/ingress.yaml` (one big Ingress) | `apps/<app>/ingress.yaml` (split)     | -->
-| `ingress/traefik-dashboard.yaml`         | `infra/traefik/dashboard.yaml`        |
-| `ingress/homepage-discovery.yaml.example`| `apps/ingress.yaml.example`           |
-| `tls/tls-store.yaml`                     | `infra/traefik/tls-store.yaml`        |
-| `tls/sealed-secrets/controller.yaml`     | `infra/sealed-secrets/controller.yaml`|
-| `tls/certificates/*`                     | `pki/*`                               |
-| `tls/secret.yaml`                        | `pki/h18s-tls.secret.yaml` (gitignored; sealed copy goes to `infra/traefik/`) |
-| `argocd/ingress.yaml`                    | `infra/argocd/ingress.yaml`           |
-| `argocd/app.yaml`                        | **delete** (replaced by `bootstrap/root.yaml`) |
-| `argocd/argocd-application.yaml`         | **delete** (broken: `YOUR_USER/YOUR_REPO`) |
-| `argocd/namespace.yaml`                  | **delete** (invalid apiVersion/kind; ns already exists) |
+Each folder's `kustomization.yaml` lists its files explicitly. Argo CD
+deploys only what's listed, so stray files are never picked up.
 
 ---
 
-## 1. Move existing files
+## Operations
 
-Run from the repo root (fish and bash both work):
+### Bootstrap a fresh cluster
 
 ```sh
-mkdir -p bootstrap argocd/projects argocd/apps infra/argocd infra/sealed-secrets infra/traefik pki
-
-for a in homepage jellyfin prowlarr qbittorrent radarr seerr
-    mkdir -p apps/$a
-    git mv deployment/$a.yaml apps/$a/deployment.yaml
-    git mv service/$a.yaml    apps/$a/service.yaml
-end
-# bash: use `for a in ...; do ...; done` instead
-
-git mv serviceaccount/homepage.yaml        apps/homepage/rbac.yaml
-git mv ingress/traefik-dashboard.yaml      infra/traefik/dashboard.yaml
-git mv tls/sealed-secrets/controller.yaml  infra/sealed-secrets/controller.yaml
-git mv argocd/ingress.yaml                 infra/argocd/ingress.yaml
-git rm argocd/app.yaml argocd/argocd-application.yaml argocd/namespace.yaml ingress/ingress.yaml
-
-# untracked files: plain mv
-mv tls/tls-store.yaml                      infra/traefik/tls-store.yaml
-mv ingress/homepage-discovery.yaml.example apps/ingress.yaml.example
-mv tls/certificates/*                      pki/
-mv tls/secret.yaml                         pki/h18s-tls.secret.yaml
-
-rmdir tls/certificates tls/sealed-secrets tls deployment service serviceaccount ingress
+# 1. install k3s and Argo CD
+# 2. restore the sealed-secrets key BEFORE the controller starts,
+#    so the committed SealedSecrets can be decrypted
+kubectl apply -f pki/sealed-secrets-key.secret.yaml
+# 3. hand everything else to Argo CD
+kubectl apply -f bootstrap/root.yaml
 ```
 
-### `.gitignore` (replace)
-
-```gitignore
-# private keys and the unsealed TLS secret never go to git
-pki/*.key
-pki/*.secret.yaml
-```
-
----
-
-## 2. Fix bugs in moved manifests
-
-### `apps/radarr/deployment.yaml` and `apps/qbittorrent/deployment.yaml`
-
-`type: Directory` sits at the volume level, so Kubernetes ignores it. Move it
-under `hostPath`:
-
-```yaml
-# before
-      volumes:
-        - name: data
-          type: Directory
-          hostPath:
-            path: /home/ad/homelab/data
-
-# after
-      volumes:
-        - name: data
-          hostPath:
-            path: /home/ad/homelab/data
-            type: Directory
-```
-
-Do the same for the `config` volume in both files.
-
-### `apps/homepage/service.yaml`
-
-Delete the empty `  type:` line under `spec:`.
-
-### `apps/ingress.yaml.example`
-
-Change the comment line
-`# Copy to <app>.yaml (Argo CD ignores *.example), ...`
-to
-`# Copy to apps/<app>/ingress.yaml and add it to that app's kustomization.yaml, ...`
-
----
-
-## 3. Split the big Ingress into one per app
-
-Create one `ingress.yaml` per app. Template (replace `NAME`, `HOST`, `PORT`):
-
-```yaml
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: NAME
-  namespace: default
-spec:
-  ingressClassName: traefik
-  rules:
-    - host: HOST
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: NAME
-                port:
-                  number: PORT
-```
-
-| File                              | NAME          | HOST                    | PORT |
-|-----------------------------------|---------------|-------------------------|------|
-| `apps/homepage/ingress.yaml`      | `homepage`    | `h18s`                  | 3000 |
-| `apps/jellyfin/ingress.yaml`      | `jellyfin`    | `jellyfin.h18s.lab`     | 8096 |
-| `apps/prowlarr/ingress.yaml`      | `prowlarr`    | `prowlarr.h18s.lab`     | 9696 |
-| `apps/qbittorrent/ingress.yaml`   | `qbittorrent` | `qbittorrent.h18s.lab`  | 8080 |
-| `apps/radarr/ingress.yaml`        | `radarr`      | `radarr.h18s.lab`       | 7878 |
-| `apps/seerr/ingress.yaml`         | `seerr`       | `seerr.h18s.lab`        | 5055 |
-
-Optional: add the `gethomepage.dev/*` annotations from `apps/ingress.yaml.example`
-so Homepage discovers each app automatically.
-
----
-
-## 4. Kustomizations (explicit file lists)
-
-### `apps/homepage/kustomization.yaml`
-
-```yaml
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-resources:
-  - rbac.yaml
-  - deployment.yaml
-  - service.yaml
-  - ingress.yaml
-```
-
-### `apps/{jellyfin,prowlarr,qbittorrent,radarr,seerr}/kustomization.yaml`
-
-Use the same file in each of the five folders:
-
-```yaml
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-resources:
-  - deployment.yaml
-  - service.yaml
-  - ingress.yaml
-```
-
-### `infra/sealed-secrets/kustomization.yaml`
-
-```yaml
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-resources:
-  - controller.yaml
-```
-
-### `infra/traefik/kustomization.yaml`
-
-```yaml
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-resources:
-  - dashboard.yaml
-  - tls-store.yaml
-  # - h18s-tls.sealed.yaml   # uncomment after step 6
-```
-
-### `infra/argocd/kustomization.yaml`
-
-```yaml
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-resources:
-  - ingress.yaml
-```
-
-### `argocd/kustomization.yaml`
-
-```yaml
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-resources:
-  - projects
-  - apps
-```
-
-### `argocd/projects/kustomization.yaml`
-
-```yaml
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-resources:
-  - infra.yaml
-  - apps.yaml
-```
-
-### `argocd/apps/kustomization.yaml` (the app registry)
-
-```yaml
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-resources:
-  # infra
-  - sealed-secrets.yaml
-  - traefik-config.yaml
-  - argocd-config.yaml
-  # apps
-  - homepage.yaml
-  - jellyfin.yaml
-  - prowlarr.yaml
-  - qbittorrent.yaml
-  - radarr.yaml
-  - seerr.yaml
-```
-
----
-
-## 5. Argo CD manifests
-
-### `bootstrap/root.yaml`
-
-```yaml
-# The only manifest applied by hand:
-#   kubectl apply -f bootstrap/root.yaml
-apiVersion: argoproj.io/v1alpha1
-kind: Application
-metadata:
-  name: root
-  namespace: argocd
-  finalizers:
-    - resources-finalizer.argocd.argoproj.io
-spec:
-  project: default
-  source:
-    repoURL: https://github.com/ad1822/h18s.git
-    targetRevision: dev
-    path: argocd
-  destination:
-    server: https://kubernetes.default.svc
-    namespace: argocd
-  syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
-```
-
-### `argocd/projects/infra.yaml`
-
-```yaml
-apiVersion: argoproj.io/v1alpha1
-kind: AppProject
-metadata:
-  name: infra
-  namespace: argocd
-  annotations:
-    argocd.argoproj.io/sync-wave: "-1"
-spec:
-  description: Cluster plumbing (sealed-secrets, traefik config, argocd config)
-  sourceRepos:
-    - https://github.com/ad1822/h18s.git
-  destinations:
-    - server: https://kubernetes.default.svc
-      namespace: "*"
-  clusterResourceWhitelist:
-    - group: "*"
-      kind: "*"
-```
-
-### `argocd/projects/apps.yaml`
-
-```yaml
-apiVersion: argoproj.io/v1alpha1
-kind: AppProject
-metadata:
-  name: apps
-  namespace: argocd
-  annotations:
-    argocd.argoproj.io/sync-wave: "-1"
-spec:
-  description: Homelab workloads
-  sourceRepos:
-    - https://github.com/ad1822/h18s.git
-  destinations:
-    - server: https://kubernetes.default.svc
-      namespace: default
-  # homepage needs a ClusterRole to read pods/ingresses for discovery
-  clusterResourceWhitelist:
-    - group: rbac.authorization.k8s.io
-      kind: ClusterRole
-    - group: rbac.authorization.k8s.io
-      kind: ClusterRoleBinding
-```
-
-### Child Application template
-
-Every file in `argocd/apps/` uses this shape. Only the five values in the table
-below change.
-
-```yaml
-apiVersion: argoproj.io/v1alpha1
-kind: Application
-metadata:
-  name: NAME
-  namespace: argocd
-  annotations:
-    argocd.argoproj.io/sync-wave: "WAVE"
-  finalizers:
-    - resources-finalizer.argocd.argoproj.io
-spec:
-  project: PROJECT
-  source:
-    repoURL: https://github.com/ad1822/h18s.git
-    targetRevision: dev
-    path: PATH
-  destination:
-    server: https://kubernetes.default.svc
-    namespace: NAMESPACE
-  syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
-```
-
-| File                                 | NAME             | PROJECT | PATH                   | NAMESPACE     | WAVE |
-|--------------------------------------|------------------|---------|------------------------|---------------|------|
-| `argocd/apps/sealed-secrets.yaml`    | `sealed-secrets` | infra   | `infra/sealed-secrets` | `kube-system` | 0    |
-| `argocd/apps/traefik-config.yaml`    | `traefik-config` | infra   | `infra/traefik`        | `kube-system` | 1    |
-| `argocd/apps/argocd-config.yaml`     | `argocd-config`  | infra   | `infra/argocd`         | `argocd`      | 1    |
-| `argocd/apps/homepage.yaml`          | `homepage`       | apps    | `apps/homepage`        | `default`     | 10   |
-| `argocd/apps/jellyfin.yaml`          | `jellyfin`       | apps    | `apps/jellyfin`        | `default`     | 10   |
-| `argocd/apps/prowlarr.yaml`          | `prowlarr`       | apps    | `apps/prowlarr`        | `default`     | 10   |
-| `argocd/apps/qbittorrent.yaml`       | `qbittorrent`    | apps    | `apps/qbittorrent`     | `default`     | 10   |
-| `argocd/apps/radarr.yaml`            | `radarr`         | apps    | `apps/radarr`          | `default`     | 10   |
-| `argocd/apps/seerr.yaml`             | `seerr`          | apps    | `apps/seerr`           | `default`     | 10   |
-
-Full example, `argocd/apps/radarr.yaml`:
-
-```yaml
-apiVersion: argoproj.io/v1alpha1
-kind: Application
-metadata:
-  name: radarr
-  namespace: argocd
-  annotations:
-    argocd.argoproj.io/sync-wave: "10"
-  finalizers:
-    - resources-finalizer.argocd.argoproj.io
-spec:
-  project: apps
-  source:
-    repoURL: https://github.com/ad1822/h18s.git
-    targetRevision: dev
-    path: apps/radarr
-  destination:
-    server: https://kubernetes.default.svc
-    namespace: default
-  syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
-```
-
-> The `resources-finalizer` means that **deleting an Application also deletes
-> its resources**. To remove an app but keep its workloads, delete it with
-> `--cascade=orphan`.
-
----
-
-## 6. Seal the TLS secret (after sealed-secrets is running)
-
-`infra/traefik/tls-store.yaml` expects the secret `h18s-tls` in `kube-system`.
-Today it only exists as an unsealed, gitignored file. To manage it from git:
-
-```sh
-kubeseal --controller-namespace kube-system --controller-name sealed-secrets-controller \
-  -f pki/h18s-tls.secret.yaml -o yaml > infra/traefik/h18s-tls.sealed.yaml
-```
-
-Then uncomment `h18s-tls.sealed.yaml` in `infra/traefik/kustomization.yaml`.
-
----
-
-## 7. Validate locally before pushing
-
-```sh
-for d in argocd argocd/apps argocd/projects infra/* apps/*/
-    test -f $d/kustomization.yaml; and kubectl kustomize $d > /dev/null; and echo "ok $d"
-end
-```
-
-Every line should print `ok`.
-
----
-
-## 8. Cut over the cluster (order matters)
-
-1. **Remove the old ApplicationSet but keep the workloads.** If you skip this,
-   it will turn `apps/`, `infra/` and `bootstrap/` into apps of their own.
-   ```sh
-   kubectl -n argocd delete applicationset homelab-apps --cascade=orphan
-   ```
-2. **Remove the Applications it generated, also keeping the workloads.**
-   Ignore "not found" errors.
-   ```sh
-   kubectl -n argocd get applications
-   kubectl -n argocd delete application deployment service ingress tls serviceaccount argocd --cascade=orphan
-   ```
-   If any of them still has a finalizer and hangs, patch it off:
-   ```sh
-   kubectl -n argocd patch application <name> --type merge -p '{"metadata":{"finalizers":null}}'
-   ```
-3. **Commit and push** the new layout to `dev`.
-4. **Bootstrap:**
-   ```sh
-   kubectl apply -f bootstrap/root.yaml
-   ```
-   Names and namespaces haven't changed, so the new Applications take over the
-   existing Deployments and Services without recreating them.
-5. **Delete the old combined Ingress.** Its hosts now clash with the per-app
-   Ingresses:
-   ```sh
-   kubectl -n default delete ingress homelab
-   ```
-6. **Verify:**
-   ```sh
-   kubectl -n argocd get applications   # all Synced / Healthy
-   kubectl -n default get ingress       # one per app
-   ```
-
----
-
-## 9. Day-to-day: adding a new app `foo`
+### Add an app `foo`
 
 1. Create `apps/foo/` with `deployment.yaml`, `service.yaml`, `ingress.yaml`
-   (copy from `apps/ingress.yaml.example`) and a `kustomization.yaml` that lists them.
-2. Create `argocd/apps/foo.yaml` from the child Application template
-   (project `apps`, path `apps/foo`, wave `10`).
+   and a `kustomization.yaml` that lists them.
+2. Create `argocd/apps/foo.yaml` (copy `radarr.yaml`: project `apps`, wave `10`).
 3. Add `- foo.yaml` to `argocd/apps/kustomization.yaml`.
-4. Push. `root` picks it up.
+4. Create its config folder: `mkdir -p ~/homelab/config/foo`.
+5. Add `foo.h18s.lab` to `/etc/hosts`.
+6. Optional: to make it toggleable, add it to the toggler's `APPS` and to both
+   `resourceNames` lists in `apps/toggler/rbac.yaml`, then increase the
+   Homepage iframe height.
+7. Open a PR. CI validates it, and merging to `dev` deploys it.
 
-To remove an app, delete its line from `argocd/apps/kustomization.yaml` and push.
-The finalizer removes the app's resources.
+### Remove an app
+
+Delete its line from `argocd/apps/kustomization.yaml` and push. Argo CD prunes
+its resources. Its data under `~/homelab/config/<app>` stays on disk.
+
+### Useful commands
+
+```sh
+kubectl -n argocd get applications                  # sync and health of every app
+kubectl get pods -n arc-systems                     # ARC controller + listener
+kubectl get pods -n arc-runners -w                  # watch runner pods during a CI run
+kubectl get cronjob,jobs                            # backup schedule and history
+kubectl scale deploy/radarr --replicas=1            # same thing the toggler does
+```
 
 ---
 
-## 10. Optional follow-ups
+## Known limitations and next steps
 
-- **Namespaces:** move the media apps into a `media` namespace. Update
-  `destination.namespace`, `metadata.namespace` in the manifests, the
-  ClusterRoleBinding subject, and the `apps` project's `destinations`. Check
-  first whether any app config calls another service by short name (e.g.
-  `http://radarr:7878`), because short names only resolve within the same namespace.
-- **Branch:** all Applications track `dev`. To switch to `main`, change
-  `targetRevision` in `bootstrap/root.yaml` and every `argocd/apps/*.yaml`.
-- **Image tags:** most images use `:latest`. Pinning versions makes Argo CD
-  diffs and rollbacks meaningful.
-- **Argo CD managing itself:** later, add an `argocd` Application (Helm chart or
-  upstream install manifest) under `infra/` so Argo CD's own install is in git too.
+- **Single node on a laptop.** If the laptop is off, nothing runs. Not built
+  for high availability.
+- **Unpinned images.** Most apps use `:latest`, so a pod restart can upgrade
+  an app without anything changing in git. Next step: pin tags with
+  Kustomize's `images:` field and let Renovate open upgrade PRs.
+- **Repeated app manifests.** The *arr apps are nearly identical YAML. A
+  shared Kustomize base, or the bjw-s `app-template` Helm chart, would remove
+  the duplication.
+- **Toggler images are built by hand.** Next step: a CI workflow that builds
+  and pushes `toggler/` on change.
+- **Backups are mirrors, not snapshots.** Look at `--backup-dir`, restic or
+  kopia, and add success/failure alerts (for example healthchecks.io or ntfy).
+- **Flaky network to GitHub.** One `raw.githubusercontent.com` IP isn't
+  reachable from my connection, which is why CI reads schemas from the runner
+  image instead of downloading them.
