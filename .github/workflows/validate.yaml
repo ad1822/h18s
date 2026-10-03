@@ -22,7 +22,7 @@ jobs:
             echo "::group::$dir"
             kustomize build "$dir" | kubeconform -strict -summary -skip CustomResourceDefinition \
               -schema-location '/opt/schemas/k8s/master-standalone-strict/{{.ResourceKind}}{{.KindSuffix}}.json' \
-              -schema-location '/opt/schemas/crds/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json'
+              -schema-location '/opt/schemas/crds/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
               || { echo "::error::$dir failed"; failed=1; }
             echo "::endgroup::"
           done
