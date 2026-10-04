@@ -1,0 +1,18 @@
+# https://kubernetes.io/docs/concepts/services-networking/ingress/
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: app
+spec:
+  rules:
+    - host: app.h18s.lab
+      http:
+        paths:
+          - path: /
+            pathType:
+            backend:
+              service:
+                name: app
+                port:
+                  number: http
+---
