@@ -12,7 +12,7 @@ components:
 
 images:
   - name: app-image
-    newName: ghcr.io/seerr-team/seerr:latest
+    newName: ghcr.io/seerr-team/seerr
     newTag: latest
 
 labels:
