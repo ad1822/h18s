@@ -53,6 +53,15 @@ patches:
                 hostPath:
                   path: /home/ad/homelab/config/seerr
   - target:
+      kind: Deployment
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/volumeMounts/0/mountPath
+        value: /app/config
+      - op: replace
+        path: /spec/template/spec/containers/0/volumeMounts/0/name
+        value: config
+  - target:
       kind: Service
     patch: |-
       - op: replace
