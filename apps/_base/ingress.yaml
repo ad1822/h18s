@@ -3,6 +3,8 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: app
+  annotations:
+    argocd.argoproj.io/sync-options: ServerSideApply=true
 spec:
   rules:
     - host: app.h18s.lab
