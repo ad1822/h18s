@@ -4,13 +4,88 @@ kind: Kustomization
 namespace: default
 
 resources:
-  - deployment.yaml
-  - service.yaml
-  - ingress.yaml
+  - ../_base
+
+components:
+  - ../_components/linuxserver
+  - ../_components/media-data
+
+images:
+  - name: app-image
+    newName: lscr.io/linuxserver/qbittorrent
+    newTag: latest
 
 labels:
   - pairs:
+      app: qbittorrent
+    includeSelectors: true # also Deployment selector, pod labels, Service selector
+  - pairs:
       type: media
-    includeTemplates: false # Also apply labels in Pod
-    includeSelectors: false # Don't apply labels in matchSelectors
+    includeTemplates: false
+    includeSelectors: false
 
+patches:
+  # rename Deployment, Service and Ingress from "app" to "qbittorrent"
+  - target:
+      name: app
+    patch: |-
+      - op: replace
+        path: /metadata/name
+        value: qbittorrent
+  - target:
+      kind: Deployment
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/ports/0/containerPort
+        value: 8080
+  - target:
+      kind: Deployment
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: app
+      spec:
+        template:
+          spec:
+            volumes:
+              - name: config # matched by name, not position
+                hostPath:
+                  path: /home/ad/homelab/config/qbittorrent
+  - target:
+      kind: Service
+    patch: |-
+      - op: replace
+        path: /spec/ports/0/port
+        value: 8080
+  - target:
+      kind: Ingress
+    patch: |-
+      - op: replace
+        path: /spec/rules/0/host
+        value: qbittorrent.h18s.lab
+  # qBittorrent extras: web UI port env, umask, and the BitTorrent ports
+  - target:
+      kind: Deployment
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value: { name: WEBUI_PORT, value: "8080" }
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value: { name: UMASK, value: "002" }
+      - op: add
+        path: /spec/template/spec/containers/0/ports/-
+        value: { name: bt-tcp, containerPort: 6881, protocol: TCP }
+      - op: add
+        path: /spec/template/spec/containers/0/ports/-
+        value: { name: bt-udp, containerPort: 6881, protocol: UDP }
+  - target:
+      kind: Service
+    patch: |-
+      - op: add
+        path: /spec/ports/-
+        value: { name: bt-tcp, port: 6881, targetPort: bt-tcp, protocol: TCP }
+      - op: add
+        path: /spec/ports/-
+        value: { name: bt-udp, port: 6881, targetPort: bt-udp, protocol: UDP }
