@@ -11,10 +11,10 @@ spec:
       http:
         paths:
           - path: /
-            pathType:
+            pathType: Prefix
             backend:
               service:
                 name: app
                 port:
-                  number: http
+                  name: http
 ---
