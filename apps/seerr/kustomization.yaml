@@ -6,9 +6,6 @@ namespace: default
 resources:
   - ../_base
 
-components:
-  - ../_components/linuxserver
-  - ../_components/media-data
 
 images:
   - name: app-image
@@ -25,7 +22,6 @@ labels:
     includeSelectors: false
 
 patches:
-  # rename Deployment, Service and Ingress from "app" to "radarr"
   - target:
       name: app
     patch: |-
@@ -41,26 +37,12 @@ patches:
   - target:
       kind: Deployment
     patch: |-
-      apiVersion: apps/v1
-      kind: Deployment
-      metadata:
-        name: app
-      spec:
-        template:
-          spec:
-            volumes:
-              - name: config # matched by name, not position
-                hostPath:
-                  path: /home/ad/homelab/config/seerr
-  - target:
-      kind: Deployment
-    patch: |-
+      - op: replace
+        path: /spec/template/spec/volumes/0/hostPath/path
+        value: /home/ad/homelab/config/seerr
       - op: replace
         path: /spec/template/spec/containers/0/volumeMounts/0/mountPath
         value: /app/config
-      - op: replace
-        path: /spec/template/spec/containers/0/volumeMounts/0/name
-        value: config
   - target:
       kind: Service
     patch: |-
