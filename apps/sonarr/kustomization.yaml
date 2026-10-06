@@ -41,17 +41,9 @@ patches:
   - target:
       kind: Deployment
     patch: |-
-      apiVersion: apps/v1
-      kind: Deployment
-      metadata:
-        name: app
-      spec:
-        template:
-          spec:
-            volumes:
-              - name: config # matched by name, not position
-                hostPath:
-                  path: /home/ad/homelab/config/sonarr
+      - op: replace
+        path: /spec/template/spec/volumes/1/hostPath/path
+        value: /home/ad/homelab/config/sonarr
   - target:
       kind: Service
     patch: |-
