@@ -21,6 +21,7 @@ spec:
       labels:
         app: app
     spec:
+      revisionHistoryLimit: 2 # Only keep latest 2 replicaset
       # initContainers:
       # Init containers are exactly like regular containers, except:
       # - Init containers always run to completion.

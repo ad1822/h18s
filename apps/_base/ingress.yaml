@@ -10,8 +10,9 @@ spec:
     - host: app.h18s.lab
       http:
         paths:
-          - path: /
+          - path: / # Match this path, Since this is /, it will match to everything with that host
             pathType: Prefix
+            # If those match, where to go.. backend section
             backend:
               service:
                 name: app
