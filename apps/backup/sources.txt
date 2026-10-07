@@ -1,4 +1,4 @@
-# paths relative to /home/ad; uploaded to gdrive:backups/<path>
+# paths relative to /home/ad; uploaded to backup-drive:backups/<path>
 Music
 Zettelkasten
 Pictures/Wallpaper
