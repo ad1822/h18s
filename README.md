@@ -1,5 +1,34 @@
 # h18s
 
+## Screenshots
+
+<p align="center">
+  <a href="assets/homepage.png">
+    <img src="assets/homepage.png" alt="Homepage dashboard, Media tab" width="100%">
+  </a>
+  <br>
+  <sub><b>Homepage, Media tab:</b> live widgets for Jellyfin, the *arr apps, qBittorrent, Seerr and Syncthing</sub>
+</p>
+
+<table>
+  <tr>
+    <td width="50%" align="center">
+      <a href="assets/cluster-info.png">
+        <img src="assets/cluster-info.png" alt="Homepage Cluster tab with per-pod CPU and memory">
+      </a>
+      <br>
+      <sub><b>Cluster tab:</b> CPU and memory per workload, found through Kubernetes service discovery</sub>
+    </td>
+    <td width="50%" align="center">
+      <a href="assets/toggler.png">
+        <img src="assets/toggler.png" alt="Toggler on/off switches for on-demand apps">
+      </a>
+      <br>
+      <sub><b>Toggler:</b> on-demand apps scaled between 0 and 1 replica, embedded in Homepage</sub>
+    </td>
+  </tr>
+</table>
+
 A single-node Kubernetes homelab on my laptop, managed with GitOps.
 Everything in the cluster is defined in this repo. Argo CD watches the `dev`
 branch and applies it, and CI checks every change before it lands.
