@@ -36,7 +36,11 @@ spec:
                 - name: HOME
                   value: /tmp
                 - name: BACKUP_DEST
-                  value: backup-drive:backups
+                  value: backup-drive:backup
+                - name: ARCHIVE_DEST # deleted/overwritten files; must be outside BACKUP_DEST
+                  value: backup-drive:backup-archive
+                - name: ARCHIVE_KEEP_DAYS
+                  value: "90"
               volumeMounts:
                 - name: scripts
                   mountPath: /scripts

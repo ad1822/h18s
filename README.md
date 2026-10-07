@@ -252,7 +252,7 @@ rebuilt cluster can't decrypt any of the committed secrets.
   15:05, the missed run starts once the cluster is back, as long as that's
   within a day.
 - **What it backs up:** each path in `apps/backup/sources.txt` (relative to
-  `/home/ad`) is synced with `rclone sync` to `gdrive:backups/<same path>`.
+  `/home/ad`) is synced with `rclone sync` to `backup-drive:backups/<same path>`.
   `/home/ad` is mounted read-only, and the job runs as uid 1000.
 - **How it runs:** `backup.sh` and `sources.txt` are packaged with
   `configMapGenerator`. The ConfigMap name carries a content hash, so editing
@@ -267,8 +267,10 @@ kubectl create job --from=cronjob/backup backup-manual
 kubectl logs -f job/backup-manual
 ```
 
-`rclone sync` mirrors my laptop, so deleting something locally also deletes
-it from Drive on the next run. It's a mirror, not a versioned backup.
+`backups/` mirrors my laptop. Files deleted or overwritten locally are not
+lost: `--backup-dir` moves them to `backups-archive/<YYYY-MM-DD>/<same path>`
+on Drive, and dated folders older than `ARCHIVE_KEEP_DAYS` (90) are purged at
+the end of each run. Purged files still sit in Drive's trash for 30 days.
 
 ---
 
@@ -419,8 +421,9 @@ kubectl scale deploy/radarr --replicas=1            # same thing the toggler doe
   the duplication.
 - **Toggler images are built by hand.** Next step: a CI workflow that builds
   and pushes `toggler/` on change.
-- **Backups are mirrors, not snapshots.** Look at `--backup-dir`, restic or
-  kopia, and add success/failure alerts (for example healthchecks.io or ntfy).
+- **Backups are a mirror plus a 90-day archive, not snapshots.** There's no
+  point-in-time restore of a whole folder. Look at restic or kopia, and add
+  success/failure alerts (for example healthchecks.io or ntfy).
 - **Flaky network to GitHub.** One `raw.githubusercontent.com` IP isn't
   reachable from my connection, which is why CI reads schemas from the runner
   image instead of downloading them.
