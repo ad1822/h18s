@@ -42,7 +42,7 @@ patches:
       kind: Deployment
     patch: |-
       - op: replace
-        path: /spec/template/spec/volumes/0/path
+        path: /spec/template/spec/volumes/1/path
         value: /home/ad/homelab/config/qBittorrent
   - target:
       kind: Service
