@@ -5,6 +5,7 @@
 // Config (env):
 //
 //	APPS         comma-separated Deployment names that may be toggled (required)
+//	JOBS         comma-separated CronJob names that may be run on demand (optional)
 //	NAMESPACE    namespace of those Deployments (default "default")
 //	LISTEN_ADDR  listen address (default ":8080")
 //	KUBE_API     API base URL for local dev, e.g. http://127.0.0.1:8001 (kubectl proxy)
@@ -37,10 +38,12 @@ type appStatus struct {
 }
 
 type server struct {
-	kube      *kubeClient
-	namespace string
-	apps      []string
-	allowed   map[string]bool
+	kube        *kubeClient
+	namespace   string
+	apps        []string
+	allowed     map[string]bool
+	jobs        []string
+	allowedJobs map[string]bool
 }
 
 func main() {
@@ -59,15 +62,22 @@ func main() {
 		namespace: envOr("NAMESPACE", "default"),
 		apps:      apps,
 		allowed:   make(map[string]bool, len(apps)),
+		jobs:      splitList(os.Getenv("JOBS")),
 	}
 	for _, a := range apps {
 		s.allowed[a] = true
+	}
+	s.allowedJobs = make(map[string]bool, len(s.jobs))
+	for _, j := range s.jobs {
+		s.allowedJobs[j] = true
 	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", s.handleIndex)
 	mux.HandleFunc("GET /api/apps", s.handleList)
 	mux.HandleFunc("POST /api/apps/{name}/{action}", s.handleToggle)
+	mux.HandleFunc("GET /api/jobs", func(w http.ResponseWriter, _ *http.Request) { writeJSON(w, http.StatusOK, s.jobs) })
+	mux.HandleFunc("POST /api/jobs/{name}", s.handleRunJob)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte("ok")) })
 
 	srv := &http.Server{
@@ -145,6 +155,40 @@ func (s *server) handleToggle(w http.ResponseWriter, r *http.Request) {
 	}
 	log.Printf("scaled %s to %d", name, replicas)
 	writeJSON(w, http.StatusOK, s.status(r.Context(), name))
+}
+
+func (s *server) handleRunJob(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get("X-Toggler") != "1" {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "missing X-Toggler header"})
+		return
+	}
+
+	name := r.PathValue("name")
+	if !s.allowedJobs[name] {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "unknown job"})
+		return
+	}
+
+	// Manual Jobs ignore the CronJob's concurrencyPolicy, so check here.
+	active, err := s.kube.jobActive(r.Context(), s.namespace, name)
+	if err != nil {
+		log.Printf("list jobs for %s: %v", name, err)
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+		return
+	}
+	if active {
+		writeJSON(w, http.StatusConflict, map[string]string{"error": "already running"})
+		return
+	}
+
+	jobName, err := s.kube.runCronJob(r.Context(), s.namespace, name)
+	if err != nil {
+		log.Printf("run cronjob %s: %v", name, err)
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+		return
+	}
+	log.Printf("started job %s from cronjob %s", jobName, name)
+	writeJSON(w, http.StatusAccepted, map[string]string{"job": jobName})
 }
 
 func (s *server) status(ctx context.Context, name string) appStatus {

@@ -52,12 +52,20 @@
   input:disabled + .slider { opacity: .5; cursor: progress; }
   input:focus-visible + .slider { outline: 2px solid var(--fg); outline-offset: 2px; }
 
+  #jobs { display: flex; flex-wrap: wrap; gap: 8px; padding: 4px 14px 10px; }
+  #jobs:empty { display: none; }
+  #jobs button { font: inherit; font-size: 13px; font-weight: 500; color: var(--fg); background: var(--track); border: 0; border-radius: 8px; padding: 6px 12px; cursor: pointer; transition: background .15s; }
+  #jobs button:hover:not(:disabled) { background: rgba(255, 255, 255, .28); }
+  #jobs button:disabled { opacity: .6; cursor: progress; }
+  #jobs button:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+
   #error { color: var(--err); font-size: 12px; padding: 0 14px 6px; }
   #error:empty { display: none; }
 </style>
 </head>
 <body>
 <ul id="apps"></ul>
+<div id="jobs"></div>
 <div id="error" role="alert"></div>
 <script>
   // Same icon source Homepage uses for "<name>.svg" icons.
@@ -155,6 +163,46 @@
     }
   }
 
+  // CronJob name -> button label.
+  const JOB_LABELS = { "homepage-bg": "Change wallpaper", backup: "Run backup" };
+
+  async function runJob(name, button) {
+    const label = JOB_LABELS[name] || name;
+    button.disabled = true;
+    button.textContent = "Starting…";
+    errorBox.textContent = "";
+    try {
+      const res = await fetch(`api/jobs/${encodeURIComponent(name)}`, {
+        method: "POST",
+        headers: { "X-Toggler": "1" },
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `status ${res.status}`);
+      }
+      button.textContent = "Started";
+    } catch (err) {
+      errorBox.textContent = `${label}: ${err.message}`;
+      button.textContent = label;
+    }
+    setTimeout(() => { button.textContent = label; button.disabled = false; }, 3000);
+  }
+
+  async function loadJobs() {
+    try {
+      const res = await fetch("api/jobs");
+      if (!res.ok) return;
+      for (const name of await res.json()) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = JOB_LABELS[name] || name;
+        button.addEventListener("click", () => runJob(name, button));
+        document.getElementById("jobs").append(button);
+      }
+    } catch {}
+  }
+
+  loadJobs();
   refresh();
   setInterval(refresh, 3000);
 </script>

@@ -118,3 +118,94 @@ func (k *kubeClient) scale(ctx context.Context, namespace, name string, replicas
 	return k.do(ctx, http.MethodPatch, deploymentPath(namespace, name)+"/scale",
 		"application/merge-patch+json", body, nil)
 }
+
+type cronJob struct {
+	Metadata struct {
+		UID string `json:"uid"`
+	} `json:"metadata"`
+	Spec struct {
+		JobTemplate struct {
+			Metadata struct {
+				Labels      map[string]string `json:"labels"`
+				Annotations map[string]string `json:"annotations"`
+			} `json:"metadata"`
+			Spec map[string]any `json:"spec"`
+		} `json:"jobTemplate"`
+	} `json:"spec"`
+}
+
+type jobList struct {
+	Items []struct {
+		Metadata struct {
+			OwnerReferences []struct {
+				Kind string `json:"kind"`
+				Name string `json:"name"`
+			} `json:"ownerReferences"`
+		} `json:"metadata"`
+		Status struct {
+			Active int32 `json:"active"`
+		} `json:"status"`
+	} `json:"items"`
+}
+
+// jobActive reports whether a Job owned by the named CronJob is still running.
+func (k *kubeClient) jobActive(ctx context.Context, namespace, cronJobName string) (bool, error) {
+	var l jobList
+	if err := k.do(ctx, http.MethodGet, "/apis/batch/v1/namespaces/"+namespace+"/jobs", "", nil, &l); err != nil {
+		return false, err
+	}
+	for _, j := range l.Items {
+		for _, o := range j.Metadata.OwnerReferences {
+			if o.Kind == "CronJob" && o.Name == cronJobName && j.Status.Active > 0 {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
+
+// runCronJob creates a Job from the CronJob's template, like
+// `kubectl create job --from=cronjob/<name>`. It returns the new Job's name.
+func (k *kubeClient) runCronJob(ctx context.Context, namespace, name string) (string, error) {
+	var cj cronJob
+	if err := k.do(ctx, http.MethodGet, "/apis/batch/v1/namespaces/"+namespace+"/cronjobs/"+name, "", nil, &cj); err != nil {
+		return "", err
+	}
+
+	tmpl := cj.Spec.JobTemplate
+	spec := tmpl.Spec
+	if spec == nil {
+		spec = map[string]any{}
+	}
+	if _, ok := spec["ttlSecondsAfterFinished"]; !ok {
+		spec["ttlSecondsAfterFinished"] = 3600 // clean up manual runs
+	}
+	annotations := map[string]string{"cronjob.kubernetes.io/instantiate": "manual"}
+	for key, v := range tmpl.Metadata.Annotations {
+		annotations[key] = v
+	}
+
+	jobName := fmt.Sprintf("%s-manual-%d", name, time.Now().Unix())
+	body, err := json.Marshal(map[string]any{
+		"apiVersion": "batch/v1",
+		"kind":       "Job",
+		"metadata": map[string]any{
+			"name":        jobName,
+			"labels":      tmpl.Metadata.Labels,
+			"annotations": annotations,
+			"ownerReferences": []map[string]any{{
+				"apiVersion": "batch/v1",
+				"kind":       "CronJob",
+				"name":       name,
+				"uid":        cj.Metadata.UID,
+				"controller": true,
+			}},
+		},
+		"spec": spec,
+	})
+	if err != nil {
+		return "", err
+	}
+	err = k.do(ctx, http.MethodPost, "/apis/batch/v1/namespaces/"+namespace+"/jobs", "application/json", body, nil)
+	return jobName, err
+}
