@@ -16,3 +16,4 @@ resources:
   - sonarr.yaml
   - syncthing.yaml
   - toggler.yaml
+  - bazarr.yaml
