@@ -1,0 +1,58 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: default
+
+resources:
+  - ../_base
+
+components:
+  - ../_components/linuxserver
+  - ../_components/media-data
+
+images:
+  - name: app-image
+    newName: ghcr.io/hotio/bazarr
+    newTag: latest
+
+labels:
+  - pairs:
+      app: bazarr
+    includeSelectors: true # also Deployment selector, pod labels, Service selector
+  - pairs:
+      type: media
+    includeTemplates: false
+    includeSelectors: false
+
+patches:
+  # rename Deployment, Service and Ingress from "app" to "radarr"
+  - target:
+      name: app
+    patch: |-
+      - op: replace
+        path: /metadata/name
+        value: bazarr
+  - target:
+      kind: Deployment
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/ports/0/containerPort
+        value: 6767
+  - target:
+      kind: Deployment
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/volumes/1/hostPath/path
+        value: /home/ad/homelab/config/bazarr
+  - target:
+      kind: Service
+    patch: |-
+      - op: replace
+        path: /spec/ports/0/port
+        value: 6767
+  - target:
+      kind: Ingress
+    patch: |-
+      - op: replace
+        path: /spec/rules/0/host
+        value: bazarr.h18s.lab
