@@ -17,3 +17,4 @@ resources:
   - syncthing.yaml
   - toggler.yaml
   - bazarr.yaml
+  - wallpaper.yaml

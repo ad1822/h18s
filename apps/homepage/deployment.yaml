@@ -36,7 +36,7 @@ spec:
               mountPath: /app/public/images
           env:
             - name: HOMEPAGE_ALLOWED_HOSTS
-              value: h18s
+              value: h18s,homepage.default.svc.cluster.local:3000
       volumes:
         - name: config
           hostPath:

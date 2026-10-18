@@ -1,0 +1,51 @@
+# https://kubernetes.io/docs/concepts/workloads/controllers/cron-jobs/
+# Runs script.sh from this folder (mounted from the change-wallpaper ConfigMap) and
+# points it at the host's homepage settings.yaml.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: homepage-bg
+  namespace: default
+spec:
+  schedule: "*/30 * * * *"
+  timeZone: Asia/Kolkata
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 600
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        spec:
+          restartPolicy: OnFailure
+          securityContext: # settings.yaml is owned by ad
+            runAsUser: 1000
+            runAsGroup: 1000
+          containers:
+            - name: change-wallpaper
+              image: python:3 # needs bash, python3 and curl
+              command: ["/bin/bash", "/scripts/script.sh"]
+              env:
+                - { name: WALL_DIR, value: /wallpapers }
+                - { name: SETTINGS, value: /homepage-config-dir/settings.yaml }
+                - {
+                    name: HOMEPAGE_URL,
+                    value: "http://homepage.default.svc.cluster.local:3000",
+                  }
+              volumeMounts:
+                - { name: scripts, mountPath: /scripts }
+                - { name: wallpaper-dir, mountPath: /wallpapers, readOnly: true }
+                - { name: homepage-config-dir, mountPath: /homepage-config-dir }
+          volumes:
+            - name: scripts
+              configMap:
+                name: wallpaper-bg
+            - name: wallpaper-dir
+              hostPath:
+                path: /home/ad/Pictures/Wallpaper
+                type: Directory
+            - name: homepage-config-dir
+              hostPath:
+                path: /home/ad/homelab/config/homepage
+                type: Directory

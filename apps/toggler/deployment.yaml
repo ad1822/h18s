@@ -22,7 +22,7 @@ spec:
           image: ayushdumasia/h18s-toggler:0.1.1
           env:
             - name: APPS
-              value: bazarr,jellyfin,prowlarr,qbittorrent,radarr,seerr,sonarr,syncthing
+              value: jellyfin,seerr,syncthing,qbittorrent,radarr,sonarr,prowlarr,bazarr
             - name: NAMESPACE
               value: default
           ports:
