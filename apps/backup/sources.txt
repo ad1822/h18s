@@ -19,3 +19,4 @@ config_bak/starship
 config_bak/rofi
 config_bak/nvim
 config_bak/kanata
+homelab/config
