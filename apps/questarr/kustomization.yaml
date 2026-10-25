@@ -8,10 +8,11 @@ resources:
 
 components:
   - ../_components/linuxserver
+  - ../_components/media-data
 
 images:
   - name: app-image
-    newName: ghcr.io/doezer/questarr:latest
+    newName: ghcr.io/doezer/questarr
     newTag: latest
 
 labels:
