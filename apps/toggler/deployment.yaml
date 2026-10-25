@@ -22,7 +22,7 @@ spec:
           image: ayushdumasia/h18s-toggler:0.2.0
           env:
             - name: APPS
-              value: jellyfin,seerr,syncthing,qbittorrent,radarr,sonarr,prowlarr,bazarr
+              value: jellyfin,seerr,syncthing,qbittorrent,radarr,sonarr,prowlarr,bazarr,questarr
             - name: JOBS
               value: homepage-bg,backup
             - name: NAMESPACE

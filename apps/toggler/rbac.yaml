@@ -23,6 +23,7 @@ rules:
         "sonarr",
         "syncthing",
         "bazarr",
+        "questarr",
       ]
     verbs: ["get"]
   - apiGroups: ["apps"]
@@ -37,6 +38,7 @@ rules:
         "sonarr",
         "syncthing",
         "bazarr",
+        "questarr",
       ]
     verbs: ["patch"]
   # run these CronJobs on demand (keep in sync with JOBS); creating a Job can't be

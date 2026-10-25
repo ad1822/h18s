@@ -1,0 +1,53 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: default
+
+resources:
+  - ../_base
+
+components:
+  - ../_components/linuxserver
+
+images:
+  - name: app-image
+    newName: ghcr.io/doezer/questarr:latest
+    newTag: latest
+
+labels:
+  - pairs:
+      app: questarr
+    includeSelectors: true # also Deployment selector, pod labels, Service selector
+
+patches:
+  # rename Deployment, Service and Ingress from "app" to "radarr"
+  - target:
+      name: app
+    patch: |-
+      - op: replace
+        path: /metadata/name
+        value: questarr
+  - target:
+      kind: Deployment
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/ports/0/containerPort
+        value: 5000
+  - target:
+      kind: Deployment
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/volumes/1/hostPath/path
+        value: /home/ad/homelab/config/questarr
+  - target:
+      kind: Service
+    patch: |-
+      - op: replace
+        path: /spec/ports/0/port
+        value: 5000
+  - target:
+      kind: Ingress
+    patch: |-
+      - op: replace
+        path: /spec/rules/0/host
+        value: questarr.h18s.lab
