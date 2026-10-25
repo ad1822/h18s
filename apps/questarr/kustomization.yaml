@@ -6,10 +6,6 @@ namespace: default
 resources:
   - ../_base
 
-components:
-  - ../_components/linuxserver
-  - ../_components/media-data
-
 images:
   - name: app-image
     newName: ghcr.io/doezer/questarr
@@ -38,8 +34,11 @@ patches:
       kind: Deployment
     patch: |-
       - op: replace
-        path: /spec/template/spec/volumes/1/hostPath/path
+        path: /spec/template/spec/volumes/0/hostPath/path
         value: /home/ad/homelab/config/questarr
+      - op: replace
+        path: /spec/template/spec/containers/0/volumeMounts/0/mountPath
+        value: /app/data
   - target:
       kind: Service
     patch: |-
