@@ -11,6 +11,7 @@ resources:
 images:
   - name: app-image
     newName: jellyfin/jellyfin
+    newTag: latest
 
 labels:
   - pairs:
