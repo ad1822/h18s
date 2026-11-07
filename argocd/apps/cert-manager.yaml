@@ -1,0 +1,23 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cert-manager
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  project: infra
+  source:
+    repoURL: oci://quay.io/jetstack/charts/cert-manager
+    targetRevision: 1.21.3
+    path: . # oci:// sources need a path; the chart sits at the artifact root
+    helm:
+      releaseName:
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: cert-manager
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

@@ -19,3 +19,4 @@ resources:
   - bazarr.yaml
   - wallpaper.yaml
   - questarr.yaml
+  - cert-manager.yaml
