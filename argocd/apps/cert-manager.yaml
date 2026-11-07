@@ -8,11 +8,14 @@ metadata:
 spec:
   project: infra
   source:
-    repoURL: oci://quay.io/jetstack/charts/cert-manager
-    targetRevision: 1.21.3
-    path: . # oci:// sources need a path; the chart sits at the artifact root
-    helm:
-      releaseName:
+    - repoURL: oci://quay.io/jetstack/charts/cert-manager
+      targetRevision: 1.21.3
+      path: . # oci:// sources need a path; the chart sits at the artifact root
+      helm:
+        releaseName:
+    - repoURL: https://github.com/ad1822/h18s.git
+      targetRevision: dev
+      path: infra/cert-manager
   destination:
     server: https://kubernetes.default.svc
     namespace: cert-manager
