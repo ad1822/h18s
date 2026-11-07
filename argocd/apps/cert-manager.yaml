@@ -12,7 +12,6 @@ spec:
       targetRevision: 1.21.3
       path: . # oci:// sources need a path; the chart sits at the artifact root
       helm:
-        releaseName:
         parameters:
           - name: installCRDs
             value: "true"
