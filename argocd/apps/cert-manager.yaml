@@ -12,7 +12,10 @@ spec:
       targetRevision: 1.21.3
       path: . # oci:// sources need a path; the chart sits at the artifact root
       helm:
-        releaseName:
+        releaseName: cert-manager
+        parameters:
+          - name: installCRDs
+            value: "true"
     - repoURL: https://github.com/ad1822/h18s.git
       targetRevision: dev
       path: infra/cert-manager
