@@ -9,6 +9,7 @@ spec:
   renewBefore: 360h # renew 15 days before expiry
   dnsNames:
     - h18s
+    - h18s.lab
     - homepage.h18s.lab
   privateKey:
     algorithm: ECDSA
