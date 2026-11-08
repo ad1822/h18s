@@ -5,8 +5,8 @@ metadata:
   namespace: kube-system # default to this, because of TLSStore
 spec:
   secretName: h18s-homepage-tls
-  duration: 2160h # 90 days
-  renewBefore: 360h # renew 15 days before expiry
+  duration: 5m # 90 days
+  renewBefore: 3m # renew 15 days before expiry
   dnsNames:
     - h18s
     - h18s.lab
