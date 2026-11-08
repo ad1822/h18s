@@ -3,3 +3,6 @@ pki/*
 
 # GitHub App / other private keys
 *.pem
+
+*.key
+*.crt

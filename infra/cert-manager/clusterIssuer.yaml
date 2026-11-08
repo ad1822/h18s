@@ -1,6 +1,7 @@
 apiVersion: cert-manager.io/v1
 kind: ClusterIssuer
 metadata:
-  name: selfsigned-cluster-issuer
+  name: h18s-ca-issuer
 spec:
-  selfSigned: {}
+  ca:
+    secertName: h18s-rootca-secret
