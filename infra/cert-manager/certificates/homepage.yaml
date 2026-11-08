@@ -4,11 +4,12 @@ metadata:
   name: h18s
   namespace: default
 spec:
-  secretName: h18s-tls
+  secretName: h18s-homepage-tls
   duration: 2160h # 90 days
   renewBefore: 360h # renew 15 days before expiry
   dnsNames:
     - h18s
+    - homepage.h18s.lab
   privateKey:
     algorithm: ECDSA
     size: 256
