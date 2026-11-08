@@ -4,4 +4,4 @@ metadata:
   name: h18s-ca-issuer
 spec:
   ca:
-    secertName: h18s-rootca-secret
+    secretName: h18s-rootca-secret
