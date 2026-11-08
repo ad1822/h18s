@@ -6,3 +6,5 @@ metadata:
 spec:
   defaultCertificate:
     secretName: h18s-tls
+  certifictes:
+    - secretName: h18s-homepage-tls
