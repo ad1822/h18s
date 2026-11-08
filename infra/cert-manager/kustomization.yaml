@@ -3,3 +3,4 @@ kind: Kustomization
 resources:
   - issuer.yaml
   - clusterIssuer.yaml
+  - root-ca-sealed-secret.yaml
