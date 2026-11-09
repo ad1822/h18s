@@ -11,7 +11,7 @@ spec:
     - repoURL: oci://ghcr.io/prometheus-community/charts/kube-prometheus-stack
       targetRevision: 93.1.0
       path: .
-    - repoURL: https://github.com/ad1822/h18s.lab
+    - repoURL: https://github.com/ad1822/h18s.git
       targetRevision: dev
       path: infra/prometheus-stack
   destination:
