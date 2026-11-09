@@ -10,6 +10,7 @@ spec:
     - https://github.com/ad1822/h18s.git
     - oci://ghcr.io/actions/actions-runner-controller-charts/*
     - oci://quay.io/jetstack/charts/cert-manager
+    - oci://ghcr.io/prometheus-community/charts/kube-prometheus-stack
   destinations:
     - server: https://kubernetes.default.svc
       namespace: "*"
