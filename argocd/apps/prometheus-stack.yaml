@@ -10,11 +10,10 @@ spec:
   sources:
     - repoURL: oci://ghcr.io/prometheus-community/charts/kube-prometheus-stack
       targetRevision: 93.1.0
-      path: . # oci:// sources need a path; the chart sits at the artifact root
-      # helm:
-      #   parameters:
-      #     - name: installCRDs
-      #       value: "true"
+      path: .
+    - repoURL: https://github.com/ad1822/h18s.lab
+      targetRevision: dev
+      path: infra/prometheus-stack
   destination:
     server: https://kubernetes.default.svc
   syncPolicy:
