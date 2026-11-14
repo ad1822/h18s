@@ -22,11 +22,13 @@ spec:
           image: ayushdumasia/h18s-toggler:0.2.0
           env:
             - name: APPS
-              value: jellyfin,seerr,syncthing,qbittorrent,radarr,sonarr,prowlarr,bazarr,questarr
+              value: jellyfin,seerr,syncthing,qbittorrent,radarr,sonarr,prowlarr,bazarr,questarr,sealed-secrets
             - name: JOBS
               value: homepage-bg,backup
             - name: NAMESPACE
               value: default
+            - name: NAMESPACE
+              value: kube-system
           ports:
             - containerPort: 8080
               name: http

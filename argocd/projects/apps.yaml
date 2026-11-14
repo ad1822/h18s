@@ -11,6 +11,8 @@ spec:
   destinations:
     - server: https://kubernetes.default.svc
       namespace: default
+    - server: https://kubernetes.default.svc
+      namespace: kube-system
   clusterResourceWhitelist:
     - group: rbac.authorization.k8s.io
       kind: ClusterRole
