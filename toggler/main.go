@@ -4,7 +4,8 @@
 //
 // Config (env):
 //
-//	APPS         comma-separated Deployment names that may be toggled (required)
+//	APPS         comma-separated Deployment names that may be toggled (required);
+//	             prefix with "<namespace>/" to override NAMESPACE for one entry
 //	JOBS         comma-separated CronJob names that may be run on demand (optional)
 //	NAMESPACE    namespace of those Deployments (default "default")
 //	LISTEN_ADDR  listen address (default ":8080")
@@ -40,6 +41,7 @@ type appStatus struct {
 type server struct {
 	kube        *kubeClient
 	namespace   string
+	appNS       map[string]string // per-app namespace overrides
 	apps        []string
 	allowed     map[string]bool
 	jobs        []string
@@ -47,7 +49,7 @@ type server struct {
 }
 
 func main() {
-	apps := splitList(os.Getenv("APPS"))
+	apps, appNS := parseApps(splitList(os.Getenv("APPS")))
 	if len(apps) == 0 {
 		log.Fatal("APPS is required, e.g. APPS=radarr,sonarr,jellyfin")
 	}
@@ -61,6 +63,7 @@ func main() {
 		kube:      kube,
 		namespace: envOr("NAMESPACE", "default"),
 		apps:      apps,
+		appNS:     appNS,
 		allowed:   make(map[string]bool, len(apps)),
 		jobs:      splitList(os.Getenv("JOBS")),
 	}
@@ -148,7 +151,7 @@ func (s *server) handleToggle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.kube.scale(r.Context(), s.namespace, name, replicas); err != nil {
+	if err := s.kube.scale(r.Context(), s.nsFor(name), name, replicas); err != nil {
 		log.Printf("scale %s to %d: %v", name, replicas, err)
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
 		return
@@ -192,7 +195,7 @@ func (s *server) handleRunJob(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) status(ctx context.Context, name string) appStatus {
-	d, err := s.kube.getDeployment(ctx, s.namespace, name)
+	d, err := s.kube.getDeployment(ctx, s.nsFor(name), name)
 	if err != nil {
 		return appStatus{Name: name, State: "unknown", Error: err.Error()}
 	}
@@ -237,4 +240,25 @@ func splitList(s string) []string {
 		}
 	}
 	return out
+}
+
+// parseApps splits "ns/name" entries into the bare name plus its namespace.
+func parseApps(entries []string) ([]string, map[string]string) {
+	names := make([]string, 0, len(entries))
+	ns := map[string]string{}
+	for _, e := range entries {
+		if n, name, ok := strings.Cut(e, "/"); ok {
+			ns[name] = n
+			e = name
+		}
+		names = append(names, e)
+	}
+	return names, ns
+}
+
+func (s *server) nsFor(name string) string {
+	if n, ok := s.appNS[name]; ok {
+		return n
+	}
+	return s.namespace
 }

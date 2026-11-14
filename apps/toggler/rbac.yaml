@@ -24,7 +24,6 @@ rules:
         "syncthing",
         "bazarr",
         "questarr",
-        "sealed-secrets-controller",
       ]
     verbs: ["get"]
   - apiGroups: ["apps"]
@@ -40,7 +39,6 @@ rules:
         "syncthing",
         "bazarr",
         "questarr",
-        "sealed-secrets-controller",
       ]
     verbs: ["patch"]
   # run these CronJobs on demand (keep in sync with JOBS); creating a Job can't be
@@ -59,6 +57,36 @@ kind: RoleBinding
 metadata:
   name: toggler
   namespace: default
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: toggler
+subjects:
+  - kind: ServiceAccount
+    name: toggler
+    namespace: default
+---
+# sealed-secrets lives in kube-system; allow only its Deployment
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: toggler
+  namespace: kube-system
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    resourceNames: ["sealed-secrets-controller"]
+    verbs: ["get"]
+  - apiGroups: ["apps"]
+    resources: ["deployments/scale"]
+    resourceNames: ["sealed-secrets-controller"]
+    verbs: ["patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: toggler
+  namespace: kube-system
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
