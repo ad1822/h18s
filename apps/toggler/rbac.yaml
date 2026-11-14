@@ -24,7 +24,7 @@ rules:
         "syncthing",
         "bazarr",
         "questarr",
-        "sealed-secrets",
+        "sealed-secrets-controller",
       ]
     verbs: ["get"]
   - apiGroups: ["apps"]
@@ -40,7 +40,7 @@ rules:
         "syncthing",
         "bazarr",
         "questarr",
-        "sealed-secrets",
+        "sealed-secrets-controller",
       ]
     verbs: ["patch"]
   # run these CronJobs on demand (keep in sync with JOBS); creating a Job can't be
