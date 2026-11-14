@@ -20,4 +20,4 @@ resources:
   - wallpaper.yaml
   - questarr.yaml
   # - cert-manager.yaml
-  # - prometheus-stack.yaml
+  - prometheus-stack.yaml
