@@ -3,6 +3,8 @@ kind: Application
 metadata:
   name: arc-runners
   namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
   annotations:
     argocd.argoproj.io/sync-wave: "2" # after the controller and its CRDs
 spec:

@@ -5,8 +5,8 @@ resources:
   - backup.yaml
   - traefik-config.yaml
   - argocd-config.yaml
-  # - arc-controller.yaml
-  # - arc-runners.yaml
+  - arc-controller.yaml
+  - arc-runners.yaml
   - homepage.yaml
   - jellyfin.yaml
   - prowlarr.yaml
@@ -19,5 +19,5 @@ resources:
   - bazarr.yaml
   - wallpaper.yaml
   - questarr.yaml
-  - cert-manager.yaml
+  # - cert-manager.yaml
   # - prometheus-stack.yaml
