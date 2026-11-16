@@ -97,7 +97,7 @@ browser ──► radarr.h18s.lab
 | 0 | `sealed-secrets` | infra | `kube-system` |
 | 1 | `traefik-config`, `argocd-config`, `arc-controller` | infra | `kube-system`, `argocd`, `arc-systems` |
 | 2 | `arc-runners` | infra | `arc-runners` |
-| 10 | `homepage`, `toggler`, `jellyfin`, `prowlarr`, `qbittorrent`, `radarr`, `sonarr`, `seerr`, `syncthing`, `backup` | apps | `default` |
+| 10 | `homepage`, `toggler`, `jellyfin`, `prowlarr`, `flaresolverr`, `qbittorrent`, `radarr`, `sonarr`, `seerr`, `syncthing`, `backup` | apps | `default` |
 
 - **`infra` project:** any namespace and any cluster-scoped resource. Sources
   are this repo plus the ARC Helm charts on `oci://ghcr.io`.
@@ -122,6 +122,7 @@ the toggler can scale them without Argo CD undoing it.
 | Radarr | `https://radarr.h18s.lab` | Movie automation | `lscr.io/linuxserver/radarr` | toggled |
 | Sonarr | `https://sonarr.h18s.lab` | TV automation | `lscr.io/linuxserver/sonarr` | toggled |
 | Prowlarr | `https://prowlarr.h18s.lab` | Indexer manager, synced to the *arr apps | `lscr.io/linuxserver/prowlarr` | toggled |
+| FlareSolverr | - | Cloudflare-challenge solver for Prowlarr (API on `flaresolverr:8191`, in-cluster only) | `ghcr.io/flaresolverr/flaresolverr` | toggled |
 | qBittorrent | `https://qbittorrent.h18s.lab` | Download client | `lscr.io/linuxserver/qbittorrent` | toggled |
 | Syncthing | `https://syncthing.h18s.lab` | File sync with my other devices (`hostNetwork`) | `syncthing/syncthing` | toggled |
 | Backup | - | Daily rclone sync to Google Drive (CronJob) | `rclone/rclone` | scheduled |
