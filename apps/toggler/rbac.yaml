@@ -47,7 +47,7 @@ rules:
   # limited by name, so the code only ever creates Jobs from the allowlisted CronJobs
   - apiGroups: ["batch"]
     resources: ["cronjobs"]
-    resourceNames: ["homepage-bg", "backup"]
+    resourceNames: ["homepage-bg", "backup", "ec2-start", "ec2-stop", "laptop-poweroff"]
     verbs: ["get"]
   - apiGroups: ["batch"]
     resources: ["jobs"]

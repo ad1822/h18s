@@ -19,12 +19,12 @@ spec:
       serviceAccountName: toggler # its token is mounted automatically; kube.go reads it
       containers:
         - name: toggler
-          image: ayushdumasia/h18s-toggler:0.3.0
+          image: ayushdumasia/h18s-toggler:0.4.0
           env:
             - name: APPS
               value: jellyfin,seerr,syncthing,qbittorrent,radarr,sonarr,prowlarr,flaresolverr,bazarr,questarr,kube-system/sealed-secrets-controller
             - name: JOBS
-              value: homepage-bg,backup
+              value: homepage-bg,backup,ec2-start,ec2-stop,laptop-poweroff
             - name: NAMESPACE
               value: default
           ports:

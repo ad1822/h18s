@@ -17,6 +17,9 @@ resources:
   - sonarr.yaml
   - syncthing.yaml
   - toggler.yaml
+  - duckdns.yaml
+  - clusterrole-secret.yaml
+  - vpn-ec2.yaml
   - bazarr.yaml
   - wallpaper.yaml
   - questarr.yaml

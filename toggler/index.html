@@ -164,10 +164,19 @@
   }
 
   // CronJob name -> button label.
-  const JOB_LABELS = { "homepage-bg": "Change wallpaper", backup: "Run backup" };
+  const JOB_LABELS = {
+    "homepage-bg": "Change wallpaper",
+    backup: "Run backup",
+    "ec2-start": "Start VPN EC2",
+    "ec2-stop": "Stop VPN EC2",
+    "laptop-poweroff": "Shut down laptop",
+  };
+  // Jobs that need a confirmation click first.
+  const CONFIRM = { "laptop-poweroff": "Shut down the laptop?" };
 
   async function runJob(name, button) {
     const label = JOB_LABELS[name] || name;
+    if (CONFIRM[name] && !confirm(CONFIRM[name])) return;
     button.disabled = true;
     button.textContent = "Starting…";
     errorBox.textContent = "";
