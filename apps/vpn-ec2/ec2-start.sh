@@ -6,18 +6,16 @@ DOMAIN="h18s"
 FQDN="${DOMAIN}.duckdns.org"
 DUCKDNS_TOKEN=$(printf %s "$DUCKDNS_TOKEN" | tr -d '\r\n')
 
-if [ "$STATE" = "stopping" ]; then
-  echo "==> Waiting for it to finish stopping"
-  aws ec2 wait instance-stopped --instance-ids "$INSTANCE_ID"
-  STATE="stopped"
-fi
-if [ "$STATE" = "stopped" ]; then
-  echo "==> Starting"
-  aws ec2 start-instances --instance-ids "$INSTANCE_ID" >/dev/null
-fi
+echo "==> Starting $INSTANCE_ID"
+aws ec2 start-instances --instance-ids "$INSTANCE_ID" \
+  --query 'StartingInstances[0].[PreviousState.Name,CurrentState.Name]' --output text
 
+# The public IP (for DuckDNS) and the running-state wait both need ec2:DescribeInstances.
 echo "==> Waiting for running state"
-aws ec2 wait instance-running --instance-ids "$INSTANCE_ID"
+aws ec2 wait instance-running --instance-ids "$INSTANCE_ID" || {
+  echo "wait failed; the role needs ec2:DescribeInstances to find the public IP"
+  exit 1
+}
 
 INSTANCE_IP=$(aws ec2 describe-instances --instance-ids "$INSTANCE_ID" \
   --query 'Reservations[0].Instances[0].PublicIpAddress' --output text)

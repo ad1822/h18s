@@ -2,12 +2,8 @@
 set -eu
 . /scripts/common.sh
 
-if [ "$STATE" = "stopped" ]; then
-  echo "==> Already stopped, nothing to do"
-  exit 0
-fi
-
-echo "==> Stopping instance"
-aws ec2 stop-instances --instance-ids "$INSTANCE_ID" >/dev/null
-aws ec2 wait instance-stopped --instance-ids "$INSTANCE_ID"
-echo "    stopped"
+# stop-instances needs only ec2:StopInstances (no Describe), and it's a no-op if
+# the instance is already stopped/stopping.
+echo "==> Stopping $INSTANCE_ID"
+aws ec2 stop-instances --instance-ids "$INSTANCE_ID" \
+  --query 'StoppingInstances[0].[PreviousState.Name,CurrentState.Name]' --output text
