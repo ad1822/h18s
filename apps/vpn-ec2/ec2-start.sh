@@ -4,6 +4,7 @@ set -eu
 
 DOMAIN="h18s"
 FQDN="${DOMAIN}.duckdns.org"
+DUCKDNS_TOKEN=$(printf %s "$DUCKDNS_TOKEN" | tr -d '\r\n')
 
 if [ "$STATE" = "stopping" ]; then
   echo "==> Waiting for it to finish stopping"
