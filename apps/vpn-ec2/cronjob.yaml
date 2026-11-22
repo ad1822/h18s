@@ -1,0 +1,138 @@
+# Manual-only jobs (suspend: true): the toggler creates a Job from these on click.
+# ec2-start / ec2-stop reach AWS with the keys in the clusterrole-secret secret, which can
+# only assume the h18s-automation role (see aws-config).
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: ec2-start
+  namespace: default
+  labels:
+    app: vpn-ec2
+spec:
+  schedule: "0 0 1 1 *"
+  suspend: true
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 600
+      template:
+        metadata:
+          labels:
+            app: vpn-ec2
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: aws
+              image: amazon/aws-cli:2.22.0
+              command: ["/bin/sh", "/scripts/ec2-start.sh"]
+              env:
+                - name: AWS_CONFIG_FILE
+                  value: /scripts/aws-config
+                - name: HOME
+                  value: /tmp
+                - name: AWS_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef: {name: clusterrole-secret, key: access-key}
+                - name: AWS_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef: {name: clusterrole-secret, key: secret-access-key}
+                - name: DUCKDNS_TOKEN
+                  valueFrom:
+                    secretKeyRef: {name: duckdns-token, key: token}
+              volumeMounts:
+                - name: scripts
+                  mountPath: /scripts
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: scripts
+              configMap:
+                name: vpn-ec2-scripts
+            - name: tmp
+              emptyDir: {}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: ec2-stop
+  namespace: default
+  labels:
+    app: vpn-ec2
+spec:
+  schedule: "0 0 1 1 *"
+  suspend: true
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 600
+      template:
+        metadata:
+          labels:
+            app: vpn-ec2
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: aws
+              image: amazon/aws-cli:2.22.0
+              command: ["/bin/sh", "/scripts/ec2-stop.sh"]
+              env:
+                - name: AWS_CONFIG_FILE
+                  value: /scripts/aws-config
+                - name: HOME
+                  value: /tmp
+                - name: AWS_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef: {name: clusterrole-secret, key: access-key}
+                - name: AWS_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef: {name: clusterrole-secret, key: secret-access-key}
+              volumeMounts:
+                - name: scripts
+                  mountPath: /scripts
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: scripts
+              configMap:
+                name: vpn-ec2-scripts
+            - name: tmp
+              emptyDir: {}
+---
+# Powers off the laptop (the k3s node). Privileged on purpose: it enters the host's
+# namespaces via PID 1. Only this job gets that; the toggler itself stays unprivileged.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: laptop-poweroff
+  namespace: default
+  labels:
+    app: vpn-ec2
+spec:
+  schedule: "0 0 1 1 *"
+  suspend: true
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 120
+      template:
+        metadata:
+          labels:
+            app: vpn-ec2
+        spec:
+          restartPolicy: Never
+          hostPID: true
+          containers:
+            - name: poweroff
+              image: alpine:3.20
+              command: ["nsenter", "-t", "1", "-m", "-u", "-i", "-n", "-p", "--", "systemctl", "poweroff"]
+              securityContext:
+                privileged: true

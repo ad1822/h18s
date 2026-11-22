@@ -1,0 +1,5 @@
+# The job's static keys (cluster-creds secret) are only allowed to assume this role.
+[default]
+region = ap-southeast-2
+role_arn = arn:aws:iam::861341510111:role/h18s-automation
+credential_source = Environment
