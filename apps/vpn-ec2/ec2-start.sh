@@ -38,4 +38,4 @@ until curl -fsS --max-time 3 --resolve "${FQDN}:443:${INSTANCE_IP}" \
   sleep 5
 done
 echo "    healthy"
-echo "NOTE: on the laptop run: sudo resolvectl flush-caches && sudo systemctl restart tailscaled"
+echo "==> Laptop DNS flush + tailscaled restart follow in the host-refresh container"

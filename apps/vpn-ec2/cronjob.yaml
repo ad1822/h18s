@@ -1,4 +1,5 @@
 # Manual-only jobs (suspend: true): the toggler creates a Job from these on click.
+# ec2-start also flushes the laptop's DNS cache and restarts tailscaled once headscale is up.
 # ec2-start / ec2-stop reach AWS with the keys in the clusterrole-secret secret, which can
 # only assume the h18s-automation role (see aws-config).
 apiVersion: batch/v1
@@ -24,7 +25,9 @@ spec:
             app: vpn-ec2
         spec:
           restartPolicy: Never
-          containers:
+          # host-refresh enters the laptop's namespaces via PID 1 (like laptop-poweroff)
+          hostPID: true
+          initContainers:
             - name: aws
               image: amazon/aws-cli:2.22.0
               command: ["/bin/sh", "/scripts/ec2-start.sh"]
@@ -47,6 +50,26 @@ spec:
                   mountPath: /scripts
                 - name: tmp
                   mountPath: /tmp
+          containers:
+            # Runs only after the EC2 is up and DuckDNS points at it: drop the stale DNS
+            # answer and restart tailscaled so the laptop reconnects to headscale.
+            - name: host-refresh
+              image: alpine:3.20
+              command:
+                - nsenter
+                - -t
+                - "1"
+                - -m
+                - -u
+                - -i
+                - -n
+                - -p
+                - --
+                - sh
+                - -c
+                - resolvectl flush-caches || true; systemctl restart tailscaled
+              securityContext:
+                privileged: true
           volumes:
             - name: scripts
               configMap:
